@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Painel de Agenciamento</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous">
+<style>
+:root{--bg:#f6f3ee;--card:#fff;--tx:#222;--mut:#666;--ln:#ddd6ca;--acc:#7a4a1e;--acc2:#e8e2d6;--ok:#2e7d32;--warn:#b07d1a;--bad:#b23a3a;--blue:#1f6fb2;--chip:#efe9df}
+@media (prefers-color-scheme:dark){:root{--bg:#1b1a18;--card:#262421;--tx:#eee;--mut:#aaa;--ln:#3a3631;--acc:#e0a96d;--acc2:#36312b;--chip:#322e29}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{position:sticky;top:0;z-index:1000;background:var(--card);border-bottom:1px solid var(--ln)}
+.top{display:flex;align-items:center;gap:8px;padding:8px 16px;flex-wrap:wrap}
+.top b{font-size:17px}.top #info{color:var(--mut);font-size:12px;flex:1;min-width:140px}
+#sync{font-size:12px;color:var(--ok)}#sync.err{color:var(--bad);font-weight:600}
+nav{display:flex;overflow-x:auto;padding:0 8px}
+nav button{border:0;background:none;color:var(--mut);padding:9px 12px;font:inherit;border-bottom:3px solid transparent;white-space:nowrap;cursor:pointer}
+nav button.on{color:var(--tx);border-color:var(--acc);font-weight:600}
+main{max-width:1100px;margin:0 auto;padding:12px 16px 60px}
+button,select,input,textarea{font:inherit;color:inherit}
+.btn{display:inline-block;border:1px solid var(--ln);background:var(--card);border-radius:8px;padding:6px 10px;cursor:pointer;text-decoration:none;color:var(--tx);font-size:14px}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.wpp{background:#1f9d55;border-color:#1f9d55;color:#fff}
+.ico{border:0;background:none;font-size:18px;cursor:pointer;color:var(--tx);padding:4px}
+select,input,textarea{background:var(--card);border:1px solid var(--ln);border-radius:8px;padding:6px 8px;max-width:100%}
+textarea{width:100%;min-height:70px}
+details.box{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:8px 12px;margin-bottom:10px}
+details.box summary{cursor:pointer;font-weight:600}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:8px}
+.fgrid label{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:2px}
+.fgrid label.ck{flex-direction:row;align-items:center;gap:6px;color:var(--tx);font-size:14px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{border:1px solid var(--ln);background:var(--chip);border-radius:20px;padding:4px 10px;font-size:13px;cursor:pointer}
+.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:8px 0}
+.grow{flex:1}
+#lista{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:10px}
+.card{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px}
+.card.own{border-left:5px solid var(--ok)}
+.card.desc{opacity:.55}
+.b1{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.tag{font-size:11px;padding:2px 7px;border-radius:10px;background:var(--chip);color:var(--tx);font-weight:600}
+.tag.hoje{background:#d62828;color:#fff}.tag.novo{background:#f4a261;color:#222}.tag.prop{background:var(--ok);color:#fff}
+.tag.multi{background:var(--blue);color:#fff}.tag.queda{background:#6a3fa0;color:#fff}.tag.est{background:var(--chip);color:var(--mut);font-weight:400}
+.score{margin-left:auto;font-weight:700;font-size:13px;border-radius:12px;padding:2px 8px;color:#fff;cursor:help}
+.preco{font-size:19px;font-weight:700}.preco s{font-size:13px;color:var(--mut);font-weight:400;margin-left:6px}
+.det,.datas{color:var(--mut);font-size:13px}.loc{font-size:14px}
+.acoes{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center}
+.acoes select{flex:1;min-width:120px}
+.crm{border-top:1px dashed var(--ln);margin-top:6px;padding-top:6px;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.crm label{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:2px}
+.crm .full{grid-column:1/-1}
+.hist{font-size:12px;color:var(--mut)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px;margin-bottom:12px}
+.kpi{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:10px}
+.kpi b{display:block;font-size:24px}.kpi span{font-size:12px;color:var(--mut)}
+.panel{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:12px;margin-bottom:12px}
+.panel h3{margin:0 0 8px;font-size:16px}
+.hb{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:13px}
+.hb .l{width:130px;flex-shrink:0}.hb .t{flex:1;background:var(--chip);border-radius:4px;height:16px;overflow:hidden}
+.hb .t i{display:block;height:100%;background:var(--acc)}.hb .v{width:70px;text-align:right}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{padding:6px 7px;border-bottom:1px solid var(--ln);text-align:left;white-space:nowrap}
+th{color:var(--mut);font-weight:600}
+.scroll{overflow-x:auto}
+#map{height:420px;border-radius:10px;border:1px solid var(--ln)}
+ul.ins{margin:0;padding-left:18px}ul.ins li{margin:5px 0}
+.mut{color:var(--mut);font-size:13px}
+a.lk{color:var(--blue);cursor:pointer;text-decoration:underline}
+dialog{border:1px solid var(--ln);border-radius:12px;background:var(--card);color:var(--tx);width:min(560px,94vw);padding:16px}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog h3{margin-top:0}
+dialog label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var(--mut);margin-bottom:8px}
+.modelo{border:1px solid var(--ln);border-radius:10px;padding:10px;margin-bottom:10px}
+.modelo input{width:100%;font-weight:600;margin-bottom:6px}
+.modelo textarea{min-height:120px}
+.resp{border-bottom:1px solid var(--ln);padding:8px 0}
+.resp b{display:block;margin-bottom:3px}
+@media (max-width:600px){.crm{grid-template-columns:1fr}#lista{grid-template-columns:1fr}.hb .l{width:100px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <b>Agenciamento POA</b><span id="info">carregando…</span><span id="sync"></span>
+    <button class="ico" id="btnReload" title="Recarregar dados">↻</button>
+    <button class="ico" id="btnCfg" title="Conexão">⚙</button>
+  </div>
+  <nav>
+    <button data-tab="anuncios" class="on">Anúncios</button>
+    <button data-tab="funil">Funil</button>
+    <button data-tab="mapa">Mapa</button>
+    <button data-tab="intel">Inteligência</button>
+    <button data-tab="msg">Mensagens</button>
+  </nav>
+</header>
+<main>
+  <section id="tab-anuncios">
+    <details class="box" id="boxFiltros">
+      <summary>Filtros <span id="resumoF" class="mut"></span></summary>
+      <div class="chips" id="fPeriodo"></div>
+      <div class="chips" id="fBairros"></div>
+      <div class="fgrid">
+        <label>Busca<input id="fTexto" placeholder="rua, código, site"></label>
+        <label>Anunciante<select id="fAnunc"><option value="">Todos</option><option value="prop">Proprietário direto</option><option value="imob">Imobiliária ou corretor</option></select></label>
+        <label>Site<select id="fFonte"><option value="">Todos</option></select></label>
+        <label>Status<select id="fStatus"></select></label>
+        <label>Preço mín. (mil)<input id="fPmin" type="number" inputmode="numeric"></label>
+        <label>Preço máx. (mil)<input id="fPmax" type="number" inputmode="numeric"></label>
+        <label>m² mín.<input id="fAmin" type="number" inputmode="numeric"></label>
+        <label>m² máx.<input id="fAmax" type="number" inputmode="numeric"></label>
+        <label>Quartos<select id="fQts"><option value="">Qualquer</option><option>1</option><option>2</option><option>3</option><option value="4">4 ou mais</option></select></label>
+        <label>Ordenar<select id="fOrdem">
+          <option value="rec">Mais recentes</option><option value="score">Maior oportunidade</option>
+          <option value="pdesc">Maior preço</option><option value="pasc">Menor preço</option>
+          <option value="m2asc">R$/m² mais baixo</option><option value="m2desc">R$/m² mais alto</option></select></label>
+        <label class="ck"><input type="checkbox" id="fMulti"> Em 2 ou mais sites</label>
+        <label class="ck"><input type="checkbox" id="fQueda"> Baixou o preço</label>
+        <label class="ck"><input type="checkbox" id="fFollow"> Follow-up vencido</label>
+        <label class="ck"><input type="checkbox" id="fSemBase"> Esconder estoque inicial</label>
+      </div>
+      <div class="bar"><button class="btn" id="btnLimpar">Limpar filtros</button></div>
+    </details>
+    <div class="bar"><span id="contagem" class="grow mut"></span><button class="btn" id="btnManual">+ Imóvel manual</button></div>
+    <div id="lista"></div>
+    <div class="bar"><button class="btn" id="btnMais" hidden>Mostrar mais</button></div>
+  </section>
+  <section id="tab-funil" hidden></section>
+  <section id="tab-mapa" hidden>
+    <div class="bar"><label class="mut">Medir por <select id="mMetrica">
+      <option value="oport">Índice de oportunidade</option><option value="ativos">Anúncios ativos</option>
+      <option value="novos7">Novos em 7 dias</option><option value="prop">Proprietários diretos</option>
+      <option value="medPm2">R$/m² mediano</option></select></label></div>
+    <div id="map"></div>
+    <p class="mut">Cada círculo fica no centro aproximado do bairro. Tamanho e cor seguem a medida escolhida (mais escuro, mais intenso).</p>
+    <div class="panel" id="rankMapa"></div>
+  </section>
+  <section id="tab-intel" hidden></section>
+  <section id="tab-msg" hidden></section>
+</main>
+
+<dialog id="dlgSetup">
+  <h3>Conectar ao repositório privado</h3>
+  <p class="mut">Os dados ficam num repositório privado do GitHub. Este aparelho só lê e grava com o token que você colar aqui; ele fica salvo apenas neste navegador.</p>
+  <label>Usuário do GitHub<input id="sOwner" placeholder="brunocassio-ferreira"></label>
+  <label>Repositório de dados<input id="sRepo" placeholder="imoveis-dados"></label>
+  <label>Token (fine-grained, só esse repositório, Contents: leitura e escrita)<input id="sToken" type="password" autocomplete="off"></label>
+  <div class="bar"><button class="btn pri" id="sSalvar">Conectar</button><button class="btn" id="sLocal">Usar só neste aparelho</button><span class="grow"></span><button class="btn" id="sSair">Desconectar</button></div>
+  <p class="mut" id="sMsg"></p>
+</dialog>
+
+<dialog id="dlgWpp">
+  <h3>Mensagem de WhatsApp</h3>
+  <label>Modelo<select id="wModelo"></select></label>
+  <label>Telefone (com DDD; vazio abre o WhatsApp para você escolher o contato)<input id="wTel" inputmode="tel" placeholder="51 99999-9999"></label>
+  <label>Texto<textarea id="wTexto" style="min-height:190px"></textarea></label>
+  <label class="ck" style="flex-direction:row;align-items:center;color:var(--tx)"><input type="checkbox" id="wMarcar" checked> Registrar no CRM como acionado hoje</label>
+  <div class="bar"><a class="btn wpp" id="wAbrir" target="_blank" rel="noopener">Abrir no WhatsApp</a><button class="btn" id="wCopiar">Copiar texto</button><span class="grow"></span><button class="btn" id="wFechar">Fechar</button></div>
+</dialog>
+
+<dialog id="dlgManual">
+  <h3>Imóvel manual</h3>
+  <p class="mut">Para anúncio visto fora do radar (placa, Marketplace, indicação).</p>
+  <label>Bairro<select id="mBairro"></select></label>
+  <label>Preço (R$)<input id="mPreco" type="number" inputmode="numeric"></label>
+  <label>m²<input id="mArea" type="number" inputmode="numeric"></label>
+  <label>Quartos<input id="mQts" type="number" inputmode="numeric"></label>
+  <label>Rua<input id="mRua"></label>
+  <label>Link<input id="mLink" placeholder="https://"></label>
+  <label>Origem<input id="mFonte" placeholder="Placa, Marketplace, indicação…"></label>
+  <label class="ck" style="flex-direction:row;align-items:center;color:var(--tx)"><input type="checkbox" id="mProp" checked> Proprietário direto</label>
+  <div class="bar"><button class="btn pri" id="mSalvar">Adicionar</button><button class="btn" id="mFechar">Cancelar</button></div>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
+<script>
+"use strict";
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeUrl=u=>/^https?:\/\//i.test(u||'')?u:'#';
+const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}catch(e){return d}},
+          set(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}},
+          del(k){try{localStorage.removeItem(k)}catch(e){}}};
+
+// bairro, centro aproximado, preposicao usada nas mensagens
+const BAIRROS=[['Moinhos de Vento',-30.0262,-51.2018,'no'],['Bela Vista',-30.0352,-51.1858,'na'],['Auxiliadora',-30.0201,-51.1949,'na'],
+ ['Rio Branco',-30.0345,-51.2035,'no'],['Bom Fim',-30.0333,-51.2130,'no'],['Petrópolis',-30.0444,-51.1834,'no'],
+ ['Menino Deus',-30.0561,-51.2237,'no'],['Jardim Botânico',-30.0525,-51.1742,'no'],['Boa Vista',-30.0228,-51.1798,'na'],['Jardim Europa',-30.0294,-51.1667,'no']];
+const PREP=Object.fromEntries(BAIRROS.map(b=>[b[0],b[3]]));
+const PORTAIS=['ZAP','OLX (proprietário)'];
+const STATUS=[['novo','Novo','#8a8a8a'],['verificar','Checar no CRM','#b07d1a'],['acionado','Acionado','#1f6fb2'],
+ ['sem_resposta','Sem resposta','#b23a3a'],['respondeu','Respondeu','#2e7d32'],['negociando','Em negociação','#6a3fa0'],
+ ['agenciado','Agenciado','#0b7a5a'],['descartado','Descartado','#555']];
+const STM=Object.fromEntries(STATUS.map(s=>[s[0],{nome:s[1],cor:s[2]}]));
+const ACIONADOS=['acionado','sem_resposta','respondeu','negociando','agenciado'];
+const RESPOSTA=['respondeu','negociando','agenciado'];
+const MOTIVOS=['Exclusividade vigente','Já está na Auxiliadora','Fora do perfil','Preço fora da realidade','Não quer corretor','Já vendido','Sem contato disponível','Duplicado','Outro'];
+const PERIODOS=[['','Todos'],['0','Hoje'],['3','3 dias'],['7','7 dias'],['30','30 dias']];
+
+const MODELOS_PADRAO={
+ proprietario:{titulo:'Primeiro contato com proprietário',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, corretor da {agencia}. Vi o seu anúncio do {tipo} {descricao} {no_bairro} e queria saber se você está aberto a conversar sobre a venda com o apoio de uma imobiliária.\n\nA gente cuida da divulgação, da triagem de interessados e de toda a parte de documentação, que é onde a venda direta costuma dar mais trabalho. Se fizer sentido, preparo uma avaliação de mercado do imóvel, sem custo e sem compromisso.\n\nSe preferir não receber contato, é só me avisar que eu não volto a escrever.'},
+ parceria:{titulo:'Parceria com corretor ou imobiliária',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, corretor da {agencia}. Vi o anúncio do {tipo} {descricao} {no_bairro} ({preco}, anunciado no {fonte}).\n\nTrabalho com imóveis desse perfil na região e queria saber se vocês aceitam parceria na venda, com divisão de honorários. Se aceitarem, me passa a ficha completa e as condições que eu apresento para os meus clientes.\n\nObrigado!'},
+ followup:{titulo:'Retomada sem resposta (3 a 5 dias)',texto:'Olá{saudacao}! Passando só para retomar a mensagem sobre o {tipo} {no_bairro}. Se a venda ainda estiver de pé e você quiser uma avaliação de mercado sem compromisso, fico à disposição. Se já resolveu, me avisa e eu encerro por aqui. Obrigado!'},
+ visita:{titulo:'Marcar avaliação (depois de resposta positiva)',texto:'Que bom! Para preparar a avaliação, consigo visitar o {tipo} {no_bairro} num horário seu? Levo uma análise com os anúncios parecidos da região e os valores pedidos. A visita leva uns 30 a 40 minutos. Que dia fica melhor para você?'},
+ preco:{titulo:'Anúncio que baixou de preço',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, corretor da {agencia}. Acompanho os anúncios {no_bairro} todos os dias e vi que o {tipo} {descricao} teve ajuste de preço recente. Posso te mostrar como ele está posicionado em relação aos parecidos da região. Se quiser, mando um resumo sem compromisso.'}
+};
+const RESPOSTAS=[
+ ['"Quanto vocês cobram?"','A comissão da {agencia} é de 6% sobre o valor da venda e só é paga se a venda acontecer. Nela entram a divulgação nos principais portais, a filtragem dos interessados, o acompanhamento das visitas e toda a documentação até a escritura.'],
+ ['"Já tenho corretor ou imobiliária"','Entendi, obrigado por avisar. O contrato de vocês é com exclusividade? Se for, eu respeito e não insisto. Se não for, posso trabalhar em paralelo para trazer mais compradores, sem custo para você enquanto a venda não sair.'],
+ ['"Quero vender sozinho"','Faz sentido, muita gente começa assim. Onde eu posso ajudar é na segurança da negociação: análise dos documentos do comprador, contrato e acompanhamento até a escritura. O CRECI-RS tem alertado para o aumento de golpes na venda direta. Se mudar de ideia, meu contato fica aqui.'],
+ ['"Quanto vale o meu imóvel?"','Consigo te passar uma faixa com base nos anúncios parecidos {no_bairro}. Para chegar num valor mais preciso, o ideal é eu conhecer o imóvel. Qual dia fica bom para uma visita rápida?'],
+ ['"Por que exclusividade?"','Com exclusividade eu consigo investir mais na venda: fotos profissionais, destaque nos portais e atendimento dedicado a quem se interessar. Também evita o mesmo imóvel aparecer com preços diferentes em vários sites, o que costuma afastar comprador. O prazo a gente combina.'],
+ ['"Agora não posso, me chama depois"','Claro! Qual o melhor dia e horário para eu te ligar?'],
+ ['"Já vendi"','Que ótimo, parabéns pela venda! Obrigado pelo retorno e boa sorte nessa nova fase.'],
+ ['"Não tenho interesse"','Sem problema, obrigado por responder. Não volto a escrever. Se um dia precisar, meu contato fica aqui.']
+];
+
+let cfg=LS.get('painel_cfg',{}), modo='', DATA={anuncios:[],gerado_em:''}, CRM=novoCrm(), crmSha=null;
+let ADS=[], MED={}, F=LS.get('painel_filtros',null)||filtrosPadrao(), limite=40, mapa=null, camadas=null, wppId=null;
+const HOJE=new Date(), HOJE_ISO=isoLocal(HOJE);
+
+function novoCrm(){return {leads:{},extras:{},config:{},modelos:null}}
+function filtrosPadrao(){return {periodo:'',bairros:[],texto:'',anunc:'',fonte:'',status:'ativos',pmin:'',pmax:'',amin:'',amax:'',qts:'',ordem:'rec',multi:false,queda:false,follow:false,semBase:false}}
+function isoLocal(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`}
+function somaDias(n){const d=new Date();d.setDate(d.getDate()+n);return isoLocal(d)}
+function dias(s){if(!s)return 9999;const [y,m,d]=s.slice(0,10).split('-').map(Number);return Math.round((new Date(HOJE.getFullYear(),HOJE.getMonth(),HOJE.getDate())-new Date(y,m-1,d))/864e5)}
+const br=s=>s?`${s.slice(8,10)}/${s.slice(5,7)}`:'';
+const money=v=>'R$ '+Math.round(v).toLocaleString('pt-BR');
+const mi=v=>v>=1e6?'R$ '+(v/1e6).toLocaleString('pt-BR',{maximumFractionDigits:2})+' mi':'R$ '+Math.round(v/1e3)+' mil';
+const num=x=>parseFloat(String(x||'').replace(',','.'))||0;
+const mediana=a=>{if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2};
+const pct=(a,b)=>b?Math.round(100*a/b)+'%':'–';
+
+/* ---------- GitHub ---------- */
+const API=p=>`https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${encodeURIComponent(cfg.repo)}/contents/${p}`;
+const H=acc=>({Authorization:'Bearer '+cfg.token,Accept:acc,'X-GitHub-Api-Version':'2022-11-28'});
+function b64dec(s){const bin=atob(s.replace(/\n/g,''));return new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0)))}
+function b64enc(str){const b=new TextEncoder().encode(str);let s='';for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(s)}
+async function ghRaw(p){const r=await fetch(API(p),{headers:H('application/vnd.github.raw+json'),cache:'no-store'});if(!r.ok)throw new Error(`${p}: HTTP ${r.status}`);return r.json()}
+async function ghCrm(){const r=await fetch(API('crm.json'),{headers:H('application/vnd.github+json'),cache:'no-store'});
+  if(r.status===404)return {sha:null,data:null};if(!r.ok)throw new Error(`crm.json: HTTP ${r.status}`);
+  const j=await r.json();return {sha:j.sha,data:JSON.parse(b64dec(j.content))}}
+function ghPut(data,sha){return fetch(API('crm.json'),{method:'PUT',headers:{...H('application/vnd.github+json'),'Content-Type':'application/json'},
+  body:JSON.stringify({message:'crm '+new Date().toISOString().slice(0,16),content:b64enc(JSON.stringify(data)),...(sha?{sha}:{})})})}
+function mesclar(rem,loc){
+  if(!rem)return loc;const out={...rem,leads:{...rem.leads},extras:{...(rem.extras||{})}};
+  for(const k of ['leads','extras'])for(const [id,v] of Object.entries(loc[k]||{}))
+    if(!out[k][id]||(v.atualizado||0)>(out[k][id].atualizado||0))out[k][id]=v;
+  if((loc.config?.atualizado||0)>(rem.config?.atualizado||0))out.config=loc.config;
+  if(loc.modelos&&((loc.modelos.atualizado||0)>(rem.modelos?.atualizado||0)))out.modelos=loc.modelos;
+  return out}
+
+let salvando=false,pendente=false,timer=null;
+function setSync(t,err){const s=$('#sync');s.textContent=t;s.className=err?'err':''}
+function salvar(){if(modo==='local'){LS.set('painel_crm_local',CRM);setSync('salvo neste aparelho');return}
+  clearTimeout(timer);setSync('salvando…');timer=setTimeout(persistir,1200)}
+async function persistir(){
+  if(salvando){pendente=true;return}salvando=true;
+  try{let r=await ghPut(CRM,crmSha);
+    if(r.status===409||r.status===422){const rem=await ghCrm();CRM=mesclar(rem.data,CRM);crmSha=rem.sha;r=await ghPut(CRM,crmSha)}
+    if(!r.ok)throw new Error('HTTP '+r.status);crmSha=(await r.json()).content.sha;setSync('salvo ✓')
+  }catch(e){setSync('erro ao salvar, toque em ↻',true);console.error(e)}
+  finally{salvando=false;if(pendente){pendente=false;persistir()}}}
+
+/* ---------- carga ---------- */
+async function carregar(){
+  setSync('');$('#info').textContent='carregando…';
+  const ehLocal=['localhost','127.0.0.1'].includes(location.hostname);
+  try{
+    if(cfg.token&&cfg.owner&&cfg.repo){modo='github';
+      const [d,c]=await Promise.all([ghRaw('anuncios.json'),ghCrm()]);DATA=d;crmSha=c.sha;CRM=Object.assign(novoCrm(),c.data||{})}
+    else if(cfg.local||ehLocal){modo='local';
+      DATA=await fetch('dados/anuncios.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('sem dados locais');return r.json()});
+      CRM=Object.assign(novoCrm(),LS.get('painel_crm_local',{}))}
+    else{abrirSetup('Conecte o repositório para ver os dados.');return}
+  }catch(e){$('#info').textContent='erro: '+e.message;abrirSetup('Não consegui ler os dados: '+e.message);return}
+  preparar();renderTudo()}
+
+function lead(id){return CRM.leads[id]||{status:'novo'}}
+function leadMut(id){return CRM.leads[id]||(CRM.leads[id]={status:'novo',hist:[]})}
+function preparar(){
+  const extras=Object.values(CRM.extras||{}).filter(x=>!x.removido);
+  ADS=[...DATA.anuncios,...extras].map(a=>{const m2=num(a.area_m2);return {...a,outros:a.outros||[],m2,pm2:m2?a.preco/m2:0,rec:a.publicado||a.visto,
+    idade:dias(a.publicado||a.visto),estoque:a.base_inicial&&!a.publicado}});
+  MED={};for(const [b] of BAIRROS)MED[b]=mediana(ADS.filter(a=>a.bairro===b&&a.pm2).map(a=>a.pm2));
+  const nomes=Object.fromEntries(ADS.map(a=>[a.id,a.fonte]));
+  for(const a of ADS){a.outrosNomes=[...new Set(a.outros.map(i=>nomes[i]).filter(Boolean))];[a.score,a.motivos]=pontuar(a)}
+  $('#info').textContent=`${DATA.anuncios.length} anúncios · dados de ${DATA.gerado_em?DATA.gerado_em.replace('T',' ').slice(0,16).split(' ').map((p,i)=>i?p:br(p)).join(' '):'?'} · ${modo==='github'?'GitHub privado':'só neste aparelho'}`;
+  const fontes=[...new Set(ADS.map(a=>a.fonte))].sort();
+  $('#fFonte').innerHTML='<option value="">Todos</option>'+fontes.map(f=>`<option>${esc(f)}</option>`).join('');
+}
+function pontuar(a){let s=0;const r=[];
+  if(a.proprietario){s+=30;r.push('proprietário direto (+30)')}
+  if(a.outros.length){s+=20;r.push(`em ${a.outros.length+1} sites, sinal de que não há exclusividade (+20)`)}
+  if(a.preco_inicial&&a.preco<a.preco_inicial){s+=15;r.push('baixou o preço (+15)')}
+  if(!a.estoque){if(a.idade<=3){s+=20;r.push('anúncio de até 3 dias (+20)')}else if(a.idade<=7){s+=12;r.push('anúncio desta semana (+12)')}else if(a.idade<=30){s+=5;r.push('anúncio do mês (+5)')}}
+  if(a.pm2&&MED[a.bairro]&&a.pm2>MED[a.bairro]*1.15){s+=10;r.push('R$/m² 15% acima da mediana do bairro, abre conversa sobre avaliação (+10)')}
+  if(a.preco>=1.5e6){s+=5;r.push('ticket a partir de R$ 1,5 mi (+5)')}
+  return [Math.min(100,s),r]}
+const corScore=s=>s>=50?'#b23a3a':s>=30?'#d97706':s>=15?'#b08d1a':'#8a8a8a';
+
+/* ---------- filtros e lista ---------- */
+function montarFiltros(){
+  $('#fPeriodo').innerHTML=PERIODOS.map(([v,t])=>`<span class="chip${F.periodo===v?' on':''}" data-p="${v}">${t}</span>`).join('');
+  $('#fBairros').innerHTML=BAIRROS.map(([b])=>`<span class="chip${F.bairros.includes(b)?' on':''}" data-b="${esc(b)}">${esc(b)}</span>`).join('');
+  $('#fStatus').innerHTML='<option value="">Todos</option><option value="ativos">Ativos (sem descartados e agenciados)</option>'+STATUS.map(([k,n])=>`<option value="${k}">${n}</option>`).join('');
+  const m={fTexto:'texto',fAnunc:'anunc',fFonte:'fonte',fStatus:'status',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fQts:'qts',fOrdem:'ordem'};
+  for(const [id,k] of Object.entries(m))$('#'+id).value=F[k];
+  for(const [id,k] of Object.entries({fMulti:'multi',fQueda:'queda',fFollow:'follow',fSemBase:'semBase'}))$('#'+id).checked=F[k];
+}
+function lerFiltros(){
+  const m={fTexto:'texto',fAnunc:'anunc',fFonte:'fonte',fStatus:'status',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fQts:'qts',fOrdem:'ordem'};
+  for(const [id,k] of Object.entries(m))F[k]=$('#'+id).value;
+  for(const [id,k] of Object.entries({fMulti:'multi',fQueda:'queda',fFollow:'follow',fSemBase:'semBase'}))F[k]=$('#'+id).checked;
+  LS.set('painel_filtros',F);limite=40;renderLista()}
+function filtrar(){
+  const t=F.texto.trim().toLowerCase();
+  let r=ADS.filter(a=>{const L=lead(a.id);
+    if(F.periodo!==''&&(a.estoque||a.idade>+F.periodo))return false;
+    if(F.semBase&&a.estoque)return false;
+    if(F.bairros.length&&!F.bairros.includes(a.bairro))return false;
+    if(F.anunc==='prop'&&!a.proprietario)return false;
+    if(F.anunc==='imob'&&a.proprietario)return false;
+    if(F.fonte&&a.fonte!==F.fonte)return false;
+    if(F.status==='ativos'&&['descartado','agenciado'].includes(L.status))return false;
+    if(F.status&&F.status!=='ativos'&&L.status!==F.status)return false;
+    if(F.pmin&&a.preco<F.pmin*1000)return false;
+    if(F.pmax&&a.preco>F.pmax*1000)return false;
+    if(F.amin&&(!a.m2||a.m2<+F.amin))return false;
+    if(F.amax&&(!a.m2||a.m2>+F.amax))return false;
+    if(F.qts&&(F.qts==='4'?+a.quartos<4:a.quartos!==F.qts))return false;
+    if(F.multi&&!a.outros.length)return false;
+    if(F.queda&&!(a.preco<a.preco_inicial))return false;
+    if(F.follow&&!(L.followup&&L.followup<=HOJE_ISO&&!['descartado','agenciado'].includes(L.status)))return false;
+    if(t&&!`${a.rua} ${a.codigo} ${a.fonte} ${a.bairro} ${L.nome||''} ${L.nota||''}`.toLowerCase().includes(t))return false;
+    return true});
+  const ord={rec:(a,b)=>(b.estoque?0:1)-(a.estoque?0:1)||b.rec.localeCompare(a.rec)||b.score-a.score,score:(a,b)=>b.score-a.score||b.rec.localeCompare(a.rec),
+    pdesc:(a,b)=>b.preco-a.preco,pasc:(a,b)=>a.preco-b.preco,m2asc:(a,b)=>(a.pm2||1e9)-(b.pm2||1e9),m2desc:(a,b)=>b.pm2-a.pm2}[F.ordem]||(()=>0);
+  return r.sort(ord)}
+function renderLista(){
+  const r=filtrar();const ativos=Object.values(F).filter(v=>v&&v!=='rec'&&v!=='ativos'&&!(Array.isArray(v)&&!v.length)).length;
+  $('#resumoF').textContent=ativos?`(${ativos} ativos)`:'';
+  $('#contagem').textContent=`${r.length} de ${ADS.length} anúncios`;
+  $('#lista').innerHTML=r.slice(0,limite).map(card).join('')||'<p class="mut">Nenhum anúncio com esses filtros.</p>';
+  $('#btnMais').hidden=r.length<=limite}
+function card(a){const L=lead(a.id);const tags=[];
+  if(a.estoque)tags.push('<span class="tag est">estoque inicial</span>');
+  else if(a.idade<=0)tags.push('<span class="tag hoje">HOJE</span>');
+  else if(a.idade<=3)tags.push('<span class="tag novo">NOVO</span>');
+  if(a.proprietario)tags.push('<span class="tag prop">proprietário</span>');
+  if(a.outros.length)tags.push(`<span class="tag multi">${a.outros.length+1} sites</span>`);
+  if(a.preco<a.preco_inicial)tags.push('<span class="tag queda">baixou</span>');
+  if(a.manual)tags.push('<span class="tag">manual</span>');
+  if(L.followup&&L.followup<=HOJE_ISO&&!['descartado','agenciado'].includes(L.status))tags.push('<span class="tag hoje">follow-up</span>');
+  const det=[a.area_m2&&a.area_m2+' m²',a.quartos&&a.quartos+' qts',a.pm2&&money(a.pm2)+'/m²',a.tipo].filter(Boolean).join(' · ');
+  const datas=(a.publicado?`publicado ${br(a.publicado)} · `:'')+`visto ${br(a.visto)}`+(a.ultima&&a.ultima!==a.visto?` · ainda no ar em ${br(a.ultima)}`:'')+(a.outrosNomes.length?` · também em ${esc(a.outrosNomes.join(', '))}`:'');
+  const aberto=abertos.has(a.id);
+  return `<article class="card${a.proprietario?' own':''}${L.status==='descartado'?' desc':''}" data-id="${esc(a.id)}">
+  <div class="b1">${tags.join('')}<span class="score" style="background:${corScore(a.score)}" title="${esc(a.motivos.join('\n')||'sem sinais fortes')}">${a.score}</span></div>
+  <div class="preco">${money(a.preco)}${a.preco<a.preco_inicial?`<s>${money(a.preco_inicial)}</s>`:''}</div>
+  <div class="det">${esc(det)}</div>
+  <div class="loc"><b>${esc(a.bairro)}</b>${a.rua?' · '+esc(a.rua):''} · ${esc(a.fonte)}</div>
+  <div class="datas">${datas}</div>
+  <div class="acoes"><a class="btn" href="${esc(safeUrl(a.link))}" target="_blank" rel="noopener">Anúncio</a>
+   <button class="btn wpp" data-act="wpp">WhatsApp</button>
+   <select data-act="status" style="border-color:${STM[L.status].cor}">${STATUS.map(([k,n])=>`<option value="${k}"${L.status===k?' selected':''}>${n}</option>`).join('')}</select>
+   <button class="btn" data-act="crm">${aberto?'▴':'CRM ▾'}</button></div>
+  <div class="crm"${aberto?'':' hidden'}>
+   <label>Contato é<select data-f="contato"><option value="">?</option><option value="proprietario"${L.contato==='proprietario'?' selected':''}>Proprietário</option><option value="corretor"${L.contato==='corretor'?' selected':''}>Corretor/imobiliária</option></select></label>
+   <label>Nome<input data-f="nome" value="${esc(L.nome)}"></label>
+   <label>Telefone<input data-f="telefone" inputmode="tel" value="${esc(L.telefone)}"></label>
+   <label>Próximo contato<input data-f="followup" type="date" value="${esc(L.followup)}"></label>
+   <label class="full">Motivo do descarte<select data-f="motivo"><option value="">(nenhum)</option>${MOTIVOS.map(m=>`<option${L.motivo===m?' selected':''}>${m}</option>`).join('')}</select></label>
+   <label class="full">Notas<textarea data-f="nota">${esc(L.nota)}</textarea></label>
+   <div class="full hist">${(L.hist||[]).map(h=>`${br(h.d)} ${esc(STM[h.s]?.nome||h.s)}`).join(' → ')||'sem histórico'}${a.manual?` · <a class="lk" data-act="remover">remover imóvel manual</a>`:''}</div>
+  </div></article>`}
+const abertos=new Set();
+function rerenderCard(id){const el=$(`.card[data-id="${CSS.escape(id)}"]`);const a=ADS.find(x=>x.id===id);if(el&&a)el.outerHTML=card(a)}
+
+function mudarStatus(id,s){const L=leadMut(id);if(L.status===s)return;
+  L.hist=L.hist||[];L.hist.push({d:HOJE_ISO,s});L.status=s;
+  if(ACIONADOS.includes(s)&&!L.acionado_em)L.acionado_em=HOJE_ISO;
+  if(RESPOSTA.includes(s)&&!L.respondeu_em)L.respondeu_em=HOJE_ISO;
+  if(s==='acionado'&&!L.followup)L.followup=somaDias(3);
+  if(['descartado','agenciado'].includes(s))L.followup='';
+  L.atualizado=Date.now();salvar()}
+
+/* ---------- WhatsApp ---------- */
+function modelos(){return Object.assign({},MODELOS_PADRAO,(CRM.modelos&&CRM.modelos.itens)||{})}
+function preencher(t,a,L){const C=CRM.config||{};
+  const desc=[a.quartos&&`${a.quartos} quarto${a.quartos==='1'?'':'s'}`,a.area_m2&&`${a.area_m2} m²`].filter(Boolean).join(' e ');
+  const v={saudacao:L.nome?', '+L.nome.trim().split(' ')[0]:'',meu_nome:C.meu_nome||'[seu nome]',agencia:C.agencia||'Suder Imóveis, da rede Auxiliadora Predial',
+    tipo:a.tipo||'apartamento',descricao:desc?'de '+desc:'',bairro:a.bairro,no_bairro:`${PREP[a.bairro]||'em'} ${a.bairro}`,
+    rua:a.rua||'',preco:money(a.preco),fonte:a.fonte.replace(' (proprietário)',''),link:a.link||''};
+  return t.replace(/\{(\w+)\}/g,(m,k)=>k in v?v[k]:m).replace(/ {2,}/g,' ').replace(/ ([,.)])/g,'$1')}
+function abrirWpp(id){wppId=id;const a=ADS.find(x=>x.id===id),L=lead(id),M=modelos();
+  const pad=['acionado','sem_resposta'].includes(L.status)?'followup':RESPOSTA.includes(L.status)?'visita':
+    (L.contato==='corretor'||(!a.proprietario&&L.contato!=='proprietario'))?'parceria':(a.preco<a.preco_inicial?'preco':'proprietario');
+  $('#wModelo').innerHTML=Object.entries(M).map(([k,m])=>`<option value="${k}"${k===pad?' selected':''}>${esc(m.titulo)}</option>`).join('');
+  $('#wTel').value=L.telefone||'';$('#wMarcar').checked=['novo','verificar','acionado','sem_resposta'].includes(L.status);
+  textoWpp();$('#dlgWpp').showModal()}
+function textoWpp(){const a=ADS.find(x=>x.id===wppId);$('#wTexto').value=preencher(modelos()[$('#wModelo').value].texto,a,lead(wppId));linkWpp()}
+function linkWpp(){let tel=$('#wTel').value.replace(/\D/g,'');if(tel&&tel.length<=11)tel='55'+tel;
+  $('#wAbrir').href=`https://wa.me/${tel}?text=${encodeURIComponent($('#wTexto').value)}`}
+function registrarWpp(){const L=leadMut(wppId);const tel=$('#wTel').value.trim();if(tel)L.telefone=tel;
+  if($('#wMarcar').checked){const mod=$('#wModelo').value;
+    if(mod==='followup'){L.hist=L.hist||[];L.hist.push({d:HOJE_ISO,s:'followup'});L.followup=somaDias(4);if(L.status==='acionado')mudarStatus(wppId,'sem_resposta')}
+    else if(['novo','verificar'].includes(L.status))mudarStatus(wppId,'acionado');
+    if(!L.contato)L.contato=mod==='parceria'?'corretor':'proprietario'}
+  L.atualizado=Date.now();salvar();rerenderCard(wppId)}
+STM.followup={nome:'retomada enviada',cor:'#888'};
+
+/* ---------- estatisticas por bairro ---------- */
+function statsBairros(){
+  const ativos=ADS.filter(a=>!['descartado','agenciado'].includes(lead(a.id).status));
+  const out=BAIRROS.map(([b,lat,lng])=>{const L=ativos.filter(a=>a.bairro===b);
+    const imobs={};for(const a of L)if(!PORTAIS.includes(a.fonte)&&!a.manual)imobs[a.fonte]=(imobs[a.fonte]||0)+1;
+    const top=Object.entries(imobs).sort((x,y)=>y[1]-x[1])[0];
+    return {b,lat,lng,ativos:L.length,novos7:L.filter(a=>!a.estoque&&a.idade<=7).length,prop:L.filter(a=>a.proprietario).length,
+      multi:L.filter(a=>a.outros.length).length,quedas:L.filter(a=>a.preco<a.preco_inicial).length,
+      medPreco:mediana(L.map(a=>a.preco)),medPm2:mediana(L.filter(a=>a.pm2).map(a=>a.pm2)),
+      top:top?`${top[0]} (${top[1]})`:'–',soma:L.reduce((s,a)=>s+a.score,0)}});
+  const mx=Math.max(1,...out.map(o=>o.soma));for(const o of out)o.oport=Math.round(100*o.soma/mx);
+  return out.sort((x,y)=>y.oport-x.oport)}
+
+/* ---------- abas ---------- */
+function renderFunil(){
+  const ids=new Set(ADS.map(a=>a.id));const Ls=Object.entries(CRM.leads).filter(([id])=>ids.has(id)).map(([id,L])=>({id,...L}));
+  const c=k=>Ls.filter(L=>L.status===k).length;
+  const acion=Ls.filter(L=>L.acionado_em),resp=Ls.filter(L=>L.respondeu_em||RESPOSTA.includes(L.status));
+  const semStatus=ADS.length-Ls.filter(L=>L.status!=='novo').length;
+  const kpi=(v,t)=>`<div class="kpi"><b>${v}</b><span>${t}</span></div>`;
+  const venc=Ls.filter(L=>L.followup&&L.followup<=HOJE_ISO&&!['descartado','agenciado'].includes(L.status));
+  const motivos={};for(const L of Ls.filter(L=>L.status==='descartado'))motivos[L.motivo||'Sem motivo']=(motivos[L.motivo||'Sem motivo']||0)+1;
+  const barra=(l,v,mx,txt)=>`<div class="hb"><span class="l">${esc(l)}</span><span class="t"><i style="width:${mx?100*v/mx:0}%"></i></span><span class="v">${txt??v}</span></div>`;
+  const etapas=[['Na base',ADS.length],['Checados no CRM',Ls.filter(L=>L.status!=='novo').length],['Acionados',acion.length],['Responderam',resp.length],
+    ['Em negociação',c('negociando')+c('agenciado')],['Agenciados',c('agenciado')]];
+  const sem=[];for(let i=7;i>=0;i--){const d=new Date(HOJE);d.setDate(d.getDate()-((d.getDay()+6)%7)-7*i);const ini=isoLocal(d);d.setDate(d.getDate()+6);const fim=isoLocal(d);
+    sem.push([br(ini),acion.filter(L=>L.acionado_em>=ini&&L.acionado_em<=fim).length])}
+  const mxs=Math.max(1,...sem.map(s=>s[1]));
+  const porB=BAIRROS.map(([b])=>{const bi=new Set(ADS.filter(a=>a.bairro===b).map(a=>a.id));const l=Ls.filter(L=>bi.has(L.id));
+    return [b,l.filter(L=>L.acionado_em).length,l.filter(L=>L.respondeu_em||RESPOSTA.includes(L.status)).length,l.filter(L=>L.status==='agenciado').length,l.filter(L=>L.status==='descartado').length]});
+  const nome=id=>{const a=ADS.find(x=>x.id===id);return a?`${a.bairro} · ${mi(a.preco)} · ${a.fonte}`:id};
+  $('#tab-funil').innerHTML=`<div class="kpis">${kpi(semStatus,'Sem tratamento')}${kpi(c('verificar'),'Checar no CRM')}${kpi(acion.length,'Acionados')}${kpi(resp.length,'Responderam')}
+   ${kpi(c('sem_resposta'),'Sem resposta')}${kpi(c('negociando'),'Em negociação')}${kpi(c('agenciado'),'Agenciados')}${kpi(c('descartado'),'Descartados')}
+   ${kpi(pct(resp.length,acion.length),'Taxa de resposta')}${kpi(pct(c('agenciado'),acion.length),'Acionado → agenciado')}</div>
+  <div class="panel"><h3>Funil</h3>${etapas.map(([l,v])=>barra(l,v,ADS.length)).join('')}</div>
+  <div class="panel"><h3>Follow-ups vencidos ou para hoje (${venc.length})</h3>${venc.length?venc.sort((a,b)=>a.followup.localeCompare(b.followup)).map(L=>`<div class="hb"><a class="lk" data-ir="${esc(L.id)}">${esc(nome(L.id))}</a><span class="grow"></span><span class="mut">${br(L.followup)} · ${esc(STM[L.status]?.nome)}</span></div>`).join(''):'<p class="mut">Nada pendente.</p>'}</div>
+  <div class="panel"><h3>Acionamentos por semana</h3>${sem.map(([l,v])=>barra('semana de '+l,v,mxs)).join('')}</div>
+  <div class="panel"><h3>Descartes por motivo</h3>${Object.keys(motivos).length?Object.entries(motivos).sort((a,b)=>b[1]-a[1]).map(([m,v])=>barra(m,v,c('descartado'))).join(''):'<p class="mut">Nenhum descarte ainda.</p>'}</div>
+  <div class="panel scroll"><h3>Por bairro</h3><table><tr><th>Bairro</th><th>Acionados</th><th>Responderam</th><th>Agenciados</th><th>Descartados</th></tr>
+   ${porB.map(r=>`<tr><td>${esc(r[0])}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td></tr>`).join('')}</table></div>`}
+
+function renderMapa(){
+  if(!window.L){$('#map').innerHTML='<p class="mut" style="padding:12px">Mapa indisponível sem internet.</p>';return}
+  if(!mapa){mapa=L.map('map',{scrollWheelZoom:false}).setView([-30.036,-51.195],13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:18,attribution:'© OpenStreetMap'}).addTo(mapa);camadas=L.layerGroup().addTo(mapa)}
+  setTimeout(()=>mapa.invalidateSize(),50);
+  const met=$('#mMetrica').value,S=statsBairros(),mx=Math.max(1,...S.map(s=>s[met]));camadas.clearLayers();
+  const fmt=v=>met==='medPm2'?money(v)+'/m²':v;
+  for(const s of S){const k=s[met]/mx;const cor=`hsl(${40-40*k},85%,${62-30*k}%)`;
+    L.circle([s.lat,s.lng],{radius:180+520*Math.sqrt(k),color:cor,fillColor:cor,fillOpacity:.55,weight:1}).addTo(camadas)
+     .bindPopup(`<b>${esc(s.b)}</b><br>${s.ativos} ativos · ${s.novos7} novos 7d<br>${s.prop} proprietários · ${s.multi} em 2+ sites<br>R$/m² mediano ${s.medPm2?money(s.medPm2):'–'}<br>Mais presente: ${esc(s.top)}<br><a class="lk" data-irb="${esc(s.b)}">ver anúncios</a>`)}
+  $('#rankMapa').innerHTML='<h3>Ranking</h3>'+[...S].sort((a,b)=>b[met]-a[met]).map(s=>`<div class="hb"><a class="lk l" data-irb="${esc(s.b)}">${esc(s.b)}</a><span class="t"><i style="width:${100*s[met]/mx}%"></i></span><span class="v">${fmt(s[met])}</span></div>`).join('')}
+
+function renderIntel(){
+  const S=statsBairros(),ativos=ADS.filter(a=>!['descartado','agenciado'].includes(lead(a.id).status));
+  const ins=[],porProp=[...S].sort((a,b)=>b.prop-a.prop),porNovos=[...S].sort((a,b)=>b.novos7-a.novos7),porM2=S.filter(s=>s.medPm2).sort((a,b)=>b.medPm2-a.medPm2);
+  const t=S[0];if(t)ins.push(`<b>${esc(t.b)}</b> lidera o índice de oportunidade: ${t.ativos} anúncios ativos, ${t.prop} de proprietário direto e ${t.multi} em mais de um site.`);
+  if(porNovos[0]?.novos7)ins.push(`Mais anúncios novos nos últimos 7 dias: <b>${esc(porNovos[0].b)}</b> (${porNovos[0].novos7}). Quem chega primeiro no proprietário de anúncio novo tem mais chance de conversa.`);
+  else ins.push(`A base começou em ${br(DATA.data_base||'')}; tudo que apareceu nesse dia conta como estoque inicial. A contagem de novos passa a valer a partir das próximas leituras.`);
+  const tp=ativos.filter(a=>a.proprietario).length;if(tp)ins.push(`${tp} anúncios de proprietário direto no radar, a maior parte ${PREP[porProp[0].b]} <b>${esc(porProp[0].b)}</b> (${porProp[0].prop}). São os contatos mais diretos para agenciar.`);
+  const tm=ativos.filter(a=>a.outros.length).length;if(tm)ins.push(`${tm} anúncios aparecem em mais de um site com bairro, m² e preço quase iguais. Imóvel em várias imobiliárias raramente tem exclusividade, e o dono pode estar aberto a concentrar a venda. Confira no anúncio antes de abordar.`);
+  if(porM2.length>1)ins.push(`R$/m² mediano mais alto ${PREP[porM2[0].b]} <b>${esc(porM2[0].b)}</b> (${money(porM2[0].medPm2)}) e mais baixo ${PREP[porM2.at(-1).b]} <b>${esc(porM2.at(-1).b)}</b> (${money(porM2.at(-1).medPm2)}). Anúncio muito acima da mediana do próprio bairro é bom gancho para oferecer avaliação.`);
+  const q=ativos.filter(a=>a.preco<a.preco_inicial).length;if(q)ins.push(`${q} anúncios baixaram o preço desde que entraram no radar. Queda de preço costuma indicar dono com pressa ou insatisfeito com a venda atual.`);
+  const imob={};for(const a of ativos)if(!PORTAIS.includes(a.fonte)&&!a.manual){imob[a.fonte]=imob[a.fonte]||{n:0,b:{},p:[]};imob[a.fonte].n++;imob[a.fonte].b[a.bairro]=(imob[a.fonte].b[a.bairro]||0)+1;imob[a.fonte].p.push(a.preco)}
+  const ti=Object.entries(imob).sort((a,b)=>b[1].n-a[1].n);const totI=ti.reduce((s,x)=>s+x[1].n,0);
+  if(ti[0])ins.push(`Entre as imobiliárias monitoradas, <b>${esc(ti[0][0])}</b> tem mais anúncios nos seus bairros (${ti[0][1].n}, ${pct(ti[0][1].n,totI)} do total lido), com mais força ${PREP[Object.entries(ti[0][1].b).sort((a,b)=>b[1]-a[1])[0][0]]} ${esc(Object.entries(ti[0][1].b).sort((a,b)=>b[1]-a[1])[0][0])}.`);
+  const top=[...ativos].sort((a,b)=>b.score-a.score).slice(0,10);
+  $('#tab-intel').innerHTML=`<div class="panel"><h3>Leitura de agora</h3><ul class="ins">${ins.map(i=>`<li>${i}</li>`).join('')}</ul></div>
+  <div class="panel"><h3>10 melhores oportunidades</h3>${top.map(a=>`<div class="hb"><span class="score" style="background:${corScore(a.score)};margin:0">${a.score}</span><a class="lk" data-ir="${esc(a.id)}">${esc(a.bairro)} · ${mi(a.preco)}${a.area_m2?' · '+esc(a.area_m2)+' m²':''} · ${esc(a.fonte)}</a></div><div class="mut" style="margin:0 0 6px 42px">${esc(a.motivos.map(m=>m.replace(/ \(\+\d+\)/,'')).join(', '))}</div>`).join('')}</div>
+  <div class="panel scroll"><h3>Bairros</h3><table><tr><th>Bairro</th><th>Índice</th><th>Ativos</th><th>Novos 7d</th><th>Proprietários</th><th>2+ sites</th><th>Baixaram</th><th>Preço mediano</th><th>R$/m² mediano</th><th>Imobiliária com mais anúncios</th></tr>
+   ${S.map(s=>`<tr><td><a class="lk" data-irb="${esc(s.b)}">${esc(s.b)}</a></td><td><b>${s.oport}</b></td><td>${s.ativos}</td><td>${s.novos7}</td><td>${s.prop}</td><td>${s.multi}</td><td>${s.quedas}</td><td>${s.medPreco?mi(s.medPreco):'–'}</td><td>${s.medPm2?money(s.medPm2):'–'}</td><td>${esc(s.top)}</td></tr>`).join('')}</table></div>
+  <div class="panel scroll"><h3>Concorrência monitorada</h3><table><tr><th>Imobiliária</th><th>Anúncios</th><th>Fatia</th><th>Bairros mais fortes</th><th>Ticket mediano</th></tr>
+   ${ti.map(([n,v])=>`<tr><td>${esc(n)}</td><td>${v.n}</td><td>${pct(v.n,totI)}</td><td>${esc(Object.entries(v.b).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([b,k])=>`${b} (${k})`).join(', '))}</td><td>${mi(mediana(v.p))}</td></tr>`).join('')}</table>
+   <p class="mut">ZAP e OLX ficam de fora desta tabela porque são portais com vários anunciantes.</p></div>
+  <div class="panel"><h3>Como o índice é calculado</h3><p class="mut">Cada anúncio soma pontos: proprietário direto +30; em 2 ou mais sites +20; baixou o preço +15; anúncio de até 3 dias +20, da semana +12, do mês +5; R$/m² 15% acima da mediana do bairro +10; ticket a partir de R$ 1,5 mi +5 (máximo 100). O índice do bairro é a soma dos pontos dos anúncios ativos, em escala de 0 a 100. A data usada é a de publicação quando o site informa; se não informa, é o dia em que o anúncio apareceu no radar.</p></div>`}
+
+function renderMsg(){const C=CRM.config||{},M=modelos();const ex=ADS.find(a=>a.area_m2&&a.quartos)||ADS[0]||{bairro:'Moinhos de Vento',preco:0,fonte:''};
+  $('#tab-msg').innerHTML=`<div class="panel"><h3>Seus dados nas mensagens</h3><div class="fgrid">
+   <label>Seu nome<input id="cNome" value="${esc(C.meu_nome)}" placeholder="Bruno"></label>
+   <label>Como apresentar a imobiliária<input id="cAg" value="${esc(C.agencia)}" placeholder="Suder Imóveis, da rede Auxiliadora Predial"></label></div>
+   <p class="mut">Variáveis aceitas nos modelos: {saudacao} {meu_nome} {agencia} {tipo} {descricao} {bairro} {no_bairro} {rua} {preco} {fonte} {link}</p></div>
+  <div class="panel"><h3>Modelos de abordagem</h3>${Object.entries(M).map(([k,m])=>`<div class="modelo" data-k="${k}"><input value="${esc(m.titulo)}"><textarea>${esc(m.texto)}</textarea>
+   <p class="mut">Prévia: ${esc(preencher(m.texto,ex,{})).replace(/\n/g,'<br>')}</p></div>`).join('')}
+   <div class="bar"><button class="btn pri" id="btnSalvarMsg">Salvar mensagens</button><button class="btn" id="btnRestaurar">Restaurar modelos originais</button></div></div>
+  <div class="panel"><h3>Respostas prontas</h3>${RESPOSTAS.map(([p,r],i)=>`<div class="resp"><b>${esc(p)}</b><span>${esc(preencher(r,ex,{}))}</span> <button class="btn" data-copy="${i}">copiar</button></div>`).join('')}
+   <p class="mut">Confirme com a Suder a comissão e a forma de se apresentar antes de usar. Nada aqui é disparo automático: cada mensagem sai do seu WhatsApp, uma por vez.</p></div>`}
+
+function renderTudo(){montarFiltros();renderLista();const ab=$('nav button.on').dataset.tab;if(ab!=='anuncios')mostrar(ab)}
+function mostrar(tab){$$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));$$('main>section').forEach(s=>s.hidden=s.id!=='tab-'+tab);
+  if(tab==='anuncios')renderLista();if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();window.scrollTo(0,0)}
+function irPara(id){F=filtrosPadrao();F.status='';LS.set('painel_filtros',F);mostrar('anuncios');montarFiltros();
+  const a=ADS.find(x=>x.id===id);if(!a)return;abertos.add(id);$('#lista').innerHTML=card(a);$('#contagem').textContent='1 anúncio (toque em Limpar filtros para voltar à lista)';$('#btnMais').hidden=true}
+function irBairro(b){F=filtrosPadrao();F.bairros=[b];F.ordem='score';LS.set('painel_filtros',F);montarFiltros();mostrar('anuncios')}
+
+/* ---------- configuracao ---------- */
+function abrirSetup(msg){$('#sOwner').value=cfg.owner||'';$('#sRepo').value=cfg.repo||'imoveis-dados';$('#sToken').value='';$('#sMsg').textContent=msg||'';
+  if(!$('#dlgSetup').open)$('#dlgSetup').showModal()}
+
+/* ---------- eventos ---------- */
+document.addEventListener('click',e=>{const t=e.target;
+  if(t.dataset.tab){mostrar(t.dataset.tab);return}
+  if(t.dataset.ir){irPara(t.dataset.ir);return}
+  if(t.dataset.irb){mapa&&mapa.closePopup();irBairro(t.dataset.irb);return}
+  if(t.dataset.p!==undefined&&t.closest('#fPeriodo')){F.periodo=t.dataset.p;LS.set('painel_filtros',F);montarFiltros();renderLista();return}
+  if(t.dataset.b&&t.closest('#fBairros')){const b=t.dataset.b;F.bairros=F.bairros.includes(b)?F.bairros.filter(x=>x!==b):[...F.bairros,b];LS.set('painel_filtros',F);montarFiltros();renderLista();return}
+  if(t.dataset.copy!==undefined){navigator.clipboard?.writeText(t.previousElementSibling.textContent);t.textContent='copiado';return}
+  const c=t.closest('.card');if(!c)return;const id=c.dataset.id;
+  if(t.dataset.act==='wpp')abrirWpp(id);
+  if(t.dataset.act==='crm'){abertos.has(id)?abertos.delete(id):abertos.add(id);rerenderCard(id)}
+  if(t.dataset.act==='remover'){const x=CRM.extras[id];if(x){x.removido=true;x.atualizado=Date.now();salvar();preparar();renderLista()}}
+});
+document.addEventListener('change',e=>{const t=e.target,c=t.closest('.card');
+  if(c&&t.dataset.act==='status'){mudarStatus(c.dataset.id,t.value);rerenderCard(c.dataset.id);return}
+  if(c&&t.dataset.f){const L=leadMut(c.dataset.id);L[t.dataset.f]=t.value;
+    if(t.dataset.f==='motivo'&&t.value&&L.status!=='descartado')mudarStatus(c.dataset.id,'descartado');
+    L.atualizado=Date.now();salvar();if(t.dataset.f==='motivo')rerenderCard(c.dataset.id);return}
+  if(t.closest('#boxFiltros'))lerFiltros()});
+$('#fTexto').addEventListener('input',()=>{clearTimeout(window._ft);window._ft=setTimeout(lerFiltros,300)});
+$('#btnLimpar').onclick=()=>{F=filtrosPadrao();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};
+$('#btnMais').onclick=()=>{limite+=40;renderLista()};
+$('#btnReload').onclick=carregar;$('#btnCfg').onclick=()=>abrirSetup('');
+$('#mMetrica').onchange=renderMapa;
+$('#wModelo').onchange=textoWpp;$('#wTel').oninput=linkWpp;$('#wTexto').oninput=linkWpp;
+$('#wAbrir').onclick=()=>{registrarWpp();$('#dlgWpp').close()};
+$('#wCopiar').onclick=()=>{navigator.clipboard?.writeText($('#wTexto').value);registrarWpp();$('#wCopiar').textContent='copiado';setTimeout(()=>$('#wCopiar').textContent='Copiar texto',1500)};
+$('#wFechar').onclick=()=>$('#dlgWpp').close();
+$('#sSalvar').onclick=async()=>{cfg={owner:$('#sOwner').value.trim(),repo:$('#sRepo').value.trim(),token:$('#sToken').value.trim()||cfg.token};
+  if(!cfg.owner||!cfg.repo||!cfg.token){$('#sMsg').textContent='Preencha os três campos.';return}
+  LS.set('painel_cfg',cfg);$('#dlgSetup').close();carregar()};
+$('#sLocal').onclick=()=>{cfg={local:true};LS.set('painel_cfg',cfg);$('#dlgSetup').close();carregar()};
+$('#sSair').onclick=()=>{LS.del('painel_cfg');cfg={};$('#sToken').value='';$('#sMsg').textContent='Token apagado deste aparelho.'};
+$('#btnManual').onclick=()=>{$('#mBairro').innerHTML=BAIRROS.map(([b])=>`<option>${esc(b)}</option>`).join('');$('#dlgManual').showModal()};
+$('#mFechar').onclick=()=>$('#dlgManual').close();
+$('#mSalvar').onclick=()=>{const preco=+$('#mPreco').value;if(!preco){$('#mPreco').focus();return}
+  const id='Manual:'+Date.now();CRM.extras[id]={id,manual:true,fonte:$('#mFonte').value.trim()||'Manual',codigo:id.slice(7),bairro:$('#mBairro').value,tipo:'apartamento',
+    preco,preco_inicial:preco,historico:[],area_m2:$('#mArea').value,quartos:$('#mQts').value,link:$('#mLink').value.trim(),rua:$('#mRua').value.trim(),
+    publicado:'',visto:HOJE_ISO,ultima:HOJE_ISO,base_inicial:false,proprietario:$('#mProp').checked,outros:[],atualizado:Date.now()};
+  salvar();preparar();$('#dlgManual').close();$$('#dlgManual input:not([type=checkbox])').forEach(i=>i.value='');irPara(id)};
+document.addEventListener('click',e=>{
+  if(e.target.id==='btnSalvarMsg'){CRM.config={meu_nome:$('#cNome').value.trim(),agencia:$('#cAg').value.trim(),atualizado:Date.now()};
+    const itens={};$$('.modelo').forEach(m=>itens[m.dataset.k]={titulo:m.querySelector('input').value,texto:m.querySelector('textarea').value});
+    CRM.modelos={itens,atualizado:Date.now()};salvar();renderMsg()}
+  if(e.target.id==='btnRestaurar'){CRM.modelos={itens:{},atualizado:Date.now()};salvar();renderMsg()}});
+carregar();
+</script>
+</body>
+</html>
