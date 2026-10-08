@@ -124,7 +124,7 @@ dialog label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var
       </div>
       <div class="bar"><button class="btn" id="btnLimpar">Limpar filtros</button></div>
     </details>
-    <div class="bar"><span id="contagem" class="grow mut"></span><button class="btn" id="btnManual">+ Imóvel manual</button></div>
+    <div class="bar"><span id="contagem" class="grow mut"></span><button class="btn" id="btnPdf" title="Abre a lista filtrada pronta para salvar em PDF ou imprimir">PDF da lista</button><button class="btn" id="btnManual">+ Imóvel manual</button></div>
     <div id="lista"></div>
     <div class="bar"><button class="btn" id="btnMais" hidden>Mostrar mais</button></div>
   </section>
@@ -503,6 +503,25 @@ function renderMsg(){const C=CRM.config||{},M=modelos();const ex=ADS.find(a=>a.a
   <div class="panel"><h3>Respostas prontas</h3>${RESPOSTAS.map(([p,r],i)=>`<div class="resp"><b>${esc(p)}</b><span>${esc(preencher(r,ex,{}))}</span> <button class="btn" data-copy="${i}">copiar</button></div>`).join('')}
    <p class="mut">Nada aqui é disparo automático: cada mensagem sai do seu WhatsApp, uma por vez.</p></div>`}
 
+/* ---------- PDF da lista filtrada (salvar pelo "Imprimir" do navegador) ---------- */
+function gerarPdf(){
+  const r=filtrar().slice(0,300);const w=window.open('','_blank');if(!w){alert('Libere pop-ups para este site para gerar o PDF.');return}
+  const por={};for(const a of r)(por[a.bairro]=por[a.bairro]||[]).push(a);
+  const blocos=Object.entries(por).map(([b,L])=>`<h2>${esc(b)} (${L.length})</h2>`+L.map(a=>{const st=lead(a.id).status;
+    return `<div class="c${a.proprietario?' own':''}"><div class="p">${mi(a.preco)} <span class="s">nota ${a.score}${st&&st!=='novo'?' · '+esc(STM[st]?.nome||st):''}</span></div>
+    <div class="m">${esc([a.tipo,a.area_m2&&a.area_m2+' m²',a.quartos&&a.quartos+' qts',a.rua,a.fonte].filter(Boolean).join(' · '))}</div>
+    <div class="m">${a.estoque?'estoque inicial':(a.publicado?'publicado ':'visto ')+br(a.rec)}${a.outrosNomes.length?' · também em '+esc(a.outrosNomes.join(', ')):''}</div>
+    ${a.link?`<a href="${esc(a.link)}">${esc(a.link.replace(/^https?:\/\/(www\.)?/,'').slice(0,70))}</a>`:''}</div>`}).join('')).join('');
+  w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anúncios ${HOJE_ISO}</title>
+<style>@page{size:A4;margin:10mm}body{font:13px/1.35 Arial,sans-serif;color:#222;background:#fff;margin:12px}h1{font-size:18px;margin:0 0 4px}
+h2{font-size:15px;background:#e8e2d6;padding:4px 8px;margin:12px 0 6px;break-after:avoid}.c{border:1px solid #ccc;border-radius:6px;padding:6px 8px;margin:0 0 6px;break-inside:avoid}
+.own{border-left:5px solid #2e7d32}.p{font-size:16px;font-weight:bold}.s{font-size:12px;color:#666;font-weight:normal}.m{color:#555;font-size:12px}a{color:#0b5cad;font-size:11px;word-break:break-all}
+.top{color:#555;margin-bottom:8px}@media print{.noprint{display:none}}</style></head><body>
+<button class="noprint" onclick="print()" style="padding:8px 14px;margin-bottom:10px">Salvar em PDF / imprimir</button>
+<h1>Anúncios ≥ R$ 500 mil</h1><div class="top">${br(HOJE_ISO)} · ${r.length} anúncios${filtrar().length>300?' (primeiros 300)':''} · filtros do painel aplicados · faixa verde = proprietário</div>${blocos}</body></html>`);
+  w.document.close();setTimeout(()=>w.print(),500);
+}
+
 /* ---------- guia: simulador de financiamento e etapas da venda ---------- */
 // referencias publicas conferidas em 08/10/2026; todas editaveis no simulador
 const REF={taxa:11.19,teto_sfh:2250000,cota:80,comprom:30,idade_max:80.5,prazo_max:420,itbi:3,itbi_sfh:0.5,cartorio:1.2,avaliacao:3500,tarifa:25};
@@ -628,6 +647,7 @@ $('#sSalvar').onclick=async()=>{cfg={owner:$('#sOwner').value.trim(),repo:$('#sR
   LS.set('painel_cfg',cfg);$('#dlgSetup').close();carregar()};
 $('#sLocal').onclick=()=>{cfg={local:true};LS.set('painel_cfg',cfg);$('#dlgSetup').close();carregar()};
 $('#sSair').onclick=()=>{LS.del('painel_cfg');cfg={};$('#sToken').value='';$('#sMsg').textContent='Token apagado deste aparelho.'};
+$('#btnPdf').onclick=gerarPdf;
 $('#btnManual').onclick=()=>{$('#mBairro').innerHTML=BAIRROS.map(([b])=>`<option>${esc(b)}</option>`).join('');$('#dlgManual').showModal()};
 $('#mFechar').onclick=()=>$('#dlgManual').close();
 $('#mSalvar').onclick=()=>{const preco=+$('#mPreco').value;if(!preco){$('#mPreco').focus();return}
