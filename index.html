@@ -200,14 +200,15 @@ const MOTIVOS=['Exclusividade vigente','Já está na Auxiliadora','Fora do perfi
 const PERIODOS=[['','Todos'],['0','Hoje'],['3','3 dias'],['7','7 dias'],['30','30 dias']];
 
 const MODELOS_PADRAO={
- proprietario:{titulo:'Primeiro contato com proprietário',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, corretor da {agencia}. Vi o seu anúncio do {tipo} {descricao} {no_bairro} e queria saber se você está aberto a conversar sobre a venda com o apoio de uma imobiliária.\n\nA gente cuida da divulgação, da triagem de interessados e de toda a parte de documentação, que é onde a venda direta costuma dar mais trabalho. Se fizer sentido, preparo uma avaliação de mercado do imóvel, sem custo e sem compromisso.\n\nSe preferir não receber contato, é só me avisar que eu não volto a escrever.'},
- parceria:{titulo:'Parceria com corretor ou imobiliária',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, corretor da {agencia}. Vi o anúncio do {tipo} {descricao} {no_bairro} ({preco}, anunciado no {fonte}).\n\nTrabalho com imóveis desse perfil na região e queria saber se vocês aceitam parceria na venda, com divisão de honorários. Se aceitarem, me passa a ficha completa e as condições que eu apresento para os meus clientes.\n\nObrigado!'},
+ proprietario:{titulo:'Quebra-gelo com proprietário (primeira mensagem)',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, corretor aqui da região. Vi o seu anúncio do {tipo} {no_bairro}. Ele ainda está disponível?'},
+ apresentacao:{titulo:'Proprietário respondeu: apresentação',texto:'Que bom! Trabalho com imóveis {no_bairro} e arredores pela {agencia}. Gostei do seu {tipo} e acho que ele tem tudo para chamar atenção de quem procura na região.\n\nSe você topar, posso dar uma passada para conhecer e te mostrar como ele está em relação aos anúncios parecidos. Sem compromisso nenhum. Que dia costuma ser melhor para você?'},
+ parceria:{titulo:'Quebra-gelo com corretor ou imobiliária',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, corretor da {agencia}. Vi o anúncio de vocês do {tipo} {descricao} {no_bairro}. Ele ainda está disponível? Vocês trabalham com parceria?'},
  followup:{titulo:'Retomada sem resposta (3 a 5 dias)',texto:'Olá{saudacao}! Passando só para retomar a mensagem sobre o {tipo} {no_bairro}. Se a venda ainda estiver de pé e você quiser uma avaliação de mercado sem compromisso, fico à disposição. Se já resolveu, me avisa e eu encerro por aqui. Obrigado!'},
  visita:{titulo:'Marcar avaliação (depois de resposta positiva)',texto:'Que bom! Para preparar a avaliação, consigo visitar o {tipo} {no_bairro} num horário seu? Levo uma análise com os anúncios parecidos da região e os valores pedidos. A visita leva uns 30 a 40 minutos. Que dia fica melhor para você?'},
  preco:{titulo:'Anúncio que baixou de preço',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, corretor da {agencia}. Acompanho os anúncios {no_bairro} todos os dias e vi que o {tipo} {descricao} teve ajuste de preço recente. Posso te mostrar como ele está posicionado em relação aos parecidos da região. Se quiser, mando um resumo sem compromisso.'}
 };
 const RESPOSTAS=[
- ['"Quanto vocês cobram?"','A comissão da {agencia} é de 6% sobre o valor da venda e só é paga se a venda acontecer. Nela entram a divulgação nos principais portais, a filtragem dos interessados, o acompanhamento das visitas e toda a documentação até a escritura.'],
+ ['"Quanto vocês cobram?"','Só é pago se a venda acontecer, e o valor depende do que a gente combinar para o seu imóvel. Prefiro te explicar com calma junto com a avaliação, assim você vê tudo de uma vez: divulgação, visitas, negociação e documentação até a escritura.'],
  ['"Já tenho corretor ou imobiliária"','Entendi, obrigado por avisar. O contrato de vocês é com exclusividade? Se for, eu respeito e não insisto. Se não for, posso trabalhar em paralelo para trazer mais compradores, sem custo para você enquanto a venda não sair.'],
  ['"Quero vender sozinho"','Faz sentido, muita gente começa assim. Onde eu posso ajudar é na segurança da negociação: análise dos documentos do comprador, contrato e acompanhamento até a escritura. O CRECI-RS tem alertado para o aumento de golpes na venda direta. Se mudar de ideia, meu contato fica aqui.'],
  ['"Quanto vale o meu imóvel?"','Consigo te passar uma faixa com base nos anúncios parecidos {no_bairro}. Para chegar num valor mais preciso, o ideal é eu conhecer o imóvel. Qual dia fica bom para uma visita rápida?'],
@@ -226,7 +227,7 @@ function filtrosPadrao(){return {periodo:'',bairros:[],texto:'',anunc:'',fonte:'
 function isoLocal(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`}
 function somaDias(n){const d=new Date();d.setDate(d.getDate()+n);return isoLocal(d)}
 function dias(s){if(!s)return 9999;const [y,m,d]=s.slice(0,10).split('-').map(Number);return Math.round((new Date(HOJE.getFullYear(),HOJE.getMonth(),HOJE.getDate())-new Date(y,m-1,d))/864e5)}
-const br=s=>s?`${s.slice(8,10)}/${s.slice(5,7)}`:'';
+const br=s=>s?`${s.slice(8,10)}/${s.slice(5,7)}`+(s.slice(0,4)!==String(HOJE.getFullYear())?'/'+s.slice(2,4):''):'';
 const money=v=>'R$ '+Math.round(v).toLocaleString('pt-BR');
 const mi=v=>v>=1e6?'R$ '+(v/1e6).toLocaleString('pt-BR',{maximumFractionDigits:2})+' mi':'R$ '+Math.round(v/1e3)+' mil';
 const num=x=>parseFloat(String(x||'').replace(',','.'))||0;
@@ -396,7 +397,7 @@ function preencher(t,a,L){const C=CRM.config||{};
     rua:a.rua||'',preco:money(a.preco),fonte:a.fonte.replace(' (proprietário)',''),link:a.link||''};
   return t.replace(/\{(\w+)\}/g,(m,k)=>k in v?v[k]:m).replace(/ {2,}/g,' ').replace(/ ([,.)])/g,'$1')}
 function abrirWpp(id){wppId=id;const a=ADS.find(x=>x.id===id),L=lead(id),M=modelos();
-  const pad=['acionado','sem_resposta'].includes(L.status)?'followup':RESPOSTA.includes(L.status)?'visita':
+  const pad=['acionado','sem_resposta'].includes(L.status)?'followup':RESPOSTA.includes(L.status)?'apresentacao':
     (L.contato==='corretor'||(!a.proprietario&&L.contato!=='proprietario'))?'parceria':(a.preco<a.preco_inicial?'preco':'proprietario');
   $('#wModelo').innerHTML=Object.entries(M).map(([k,m])=>`<option value="${k}"${k===pad?' selected':''}>${esc(m.titulo)}</option>`).join('');
   $('#wTel').value=L.telefone||'';$('#wMarcar').checked=['novo','verificar','acionado','sem_resposta'].includes(L.status);
@@ -497,7 +498,7 @@ function renderMsg(){const C=CRM.config||{},M=modelos();const ex=ADS.find(a=>a.a
    <p class="mut">Prévia: ${esc(preencher(m.texto,ex,{})).replace(/\n/g,'<br>')}</p></div>`).join('')}
    <div class="bar"><button class="btn pri" id="btnSalvarMsg">Salvar mensagens</button><button class="btn" id="btnRestaurar">Restaurar modelos originais</button></div></div>
   <div class="panel"><h3>Respostas prontas</h3>${RESPOSTAS.map(([p,r],i)=>`<div class="resp"><b>${esc(p)}</b><span>${esc(preencher(r,ex,{}))}</span> <button class="btn" data-copy="${i}">copiar</button></div>`).join('')}
-   <p class="mut">Confirme com a Suder a comissão e a forma de se apresentar antes de usar. Nada aqui é disparo automático: cada mensagem sai do seu WhatsApp, uma por vez.</p></div>`}
+   <p class="mut">Nada aqui é disparo automático: cada mensagem sai do seu WhatsApp, uma por vez.</p></div>`}
 
 function renderTudo(){montarFiltros();renderLista();const ab=$('nav button.on').dataset.tab;if(ab!=='anuncios')mostrar(ab)}
 function mostrar(tab){$$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));$$('main>section').forEach(s=>s.hidden=s.id!=='tab-'+tab);
