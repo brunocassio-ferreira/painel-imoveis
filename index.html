@@ -107,6 +107,7 @@ dialog label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var
         <label>Busca<input id="fTexto" placeholder="rua, código, site"></label>
         <label>Anunciante<select id="fAnunc"><option value="">Todos</option><option value="prop">Proprietário direto</option><option value="imob">Imobiliária ou corretor</option></select></label>
         <label>Site<select id="fFonte"><option value="">Todos</option></select></label>
+        <label>Tipo<select id="fTipo"><option value="">Todos</option></select></label>
         <label>Status<select id="fStatus"></select></label>
         <label>Preço mín. (mil)<input id="fPmin" type="number" inputmode="numeric"></label>
         <label>Preço máx. (mil)<input id="fPmax" type="number" inputmode="numeric"></label>
@@ -225,7 +226,7 @@ let ADS=[], MED={}, F=LS.get('painel_filtros',null)||filtrosPadrao(), limite=40,
 const HOJE=new Date(), HOJE_ISO=isoLocal(HOJE);
 
 function novoCrm(){return {leads:{},extras:{},config:{},modelos:null}}
-function filtrosPadrao(){return {periodo:'',bairros:[],texto:'',anunc:'',fonte:'',status:'ativos',pmin:'',pmax:'',amin:'',amax:'',qts:'',ordem:'rec',multi:false,queda:false,follow:false,semBase:false}}
+function filtrosPadrao(){return {periodo:'',bairros:[],texto:'',anunc:'',fonte:'',tipo:'',status:'ativos',pmin:'',pmax:'',amin:'',amax:'',qts:'',ordem:'rec',multi:false,queda:false,follow:false,semBase:false}}
 function isoLocal(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`}
 function somaDias(n){const d=new Date();d.setDate(d.getDate()+n);return isoLocal(d)}
 function dias(s){if(!s)return 9999;const [y,m,d]=s.slice(0,10).split('-').map(Number);return Math.round((new Date(HOJE.getFullYear(),HOJE.getMonth(),HOJE.getDate())-new Date(y,m-1,d))/864e5)}
@@ -293,6 +294,8 @@ function preparar(){
   $('#info').textContent=`${DATA.anuncios.length} anúncios · dados de ${DATA.gerado_em?DATA.gerado_em.replace('T',' ').slice(0,16).split(' ').map((p,i)=>i?p:br(p)).join(' '):'?'} · ${modo==='github'?'GitHub privado':'só neste aparelho'}`;
   const fontes=[...new Set(ADS.map(a=>a.fonte))].sort();
   $('#fFonte').innerHTML='<option value="">Todos</option>'+fontes.map(f=>`<option>${esc(f)}</option>`).join('');
+  const tipos=[...new Set(ADS.map(a=>a.tipo||'não informado'))].sort();
+  $('#fTipo').innerHTML='<option value="">Todos</option>'+tipos.map(t=>`<option>${esc(t)}</option>`).join('');
 }
 function pontuar(a){let s=0;const r=[];
   if(a.proprietario){s+=30;r.push('proprietário direto (+30)')}
@@ -309,12 +312,12 @@ function montarFiltros(){
   $('#fPeriodo').innerHTML=PERIODOS.map(([v,t])=>`<span class="chip${F.periodo===v?' on':''}" data-p="${v}">${t}</span>`).join('');
   $('#fBairros').innerHTML=BAIRROS.map(([b])=>`<span class="chip${F.bairros.includes(b)?' on':''}" data-b="${esc(b)}">${esc(b)}</span>`).join('');
   $('#fStatus').innerHTML='<option value="">Todos</option><option value="ativos">Ativos (sem descartados e agenciados)</option>'+STATUS.map(([k,n])=>`<option value="${k}">${n}</option>`).join('');
-  const m={fTexto:'texto',fAnunc:'anunc',fFonte:'fonte',fStatus:'status',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fQts:'qts',fOrdem:'ordem'};
-  for(const [id,k] of Object.entries(m))$('#'+id).value=F[k];
+  const m={fTexto:'texto',fAnunc:'anunc',fFonte:'fonte',fTipo:'tipo',fStatus:'status',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fQts:'qts',fOrdem:'ordem'};
+  for(const [id,k] of Object.entries(m))$('#'+id).value=F[k]??'';
   for(const [id,k] of Object.entries({fMulti:'multi',fQueda:'queda',fFollow:'follow',fSemBase:'semBase'}))$('#'+id).checked=F[k];
 }
 function lerFiltros(){
-  const m={fTexto:'texto',fAnunc:'anunc',fFonte:'fonte',fStatus:'status',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fQts:'qts',fOrdem:'ordem'};
+  const m={fTexto:'texto',fAnunc:'anunc',fFonte:'fonte',fTipo:'tipo',fStatus:'status',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fQts:'qts',fOrdem:'ordem'};
   for(const [id,k] of Object.entries(m))F[k]=$('#'+id).value;
   for(const [id,k] of Object.entries({fMulti:'multi',fQueda:'queda',fFollow:'follow',fSemBase:'semBase'}))F[k]=$('#'+id).checked;
   LS.set('painel_filtros',F);limite=40;renderLista()}
@@ -327,6 +330,7 @@ function filtrar(){
     if(F.anunc==='prop'&&!a.proprietario)return false;
     if(F.anunc==='imob'&&a.proprietario)return false;
     if(F.fonte&&a.fonte!==F.fonte)return false;
+    if(F.tipo&&(a.tipo||'não informado')!==F.tipo)return false;
     if(F.status==='ativos'&&['descartado','agenciado'].includes(L.status))return false;
     if(F.status&&F.status!=='ativos'&&L.status!==F.status)return false;
     if(F.pmin&&a.preco<F.pmin*1000)return false;
