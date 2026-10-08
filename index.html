@@ -94,6 +94,7 @@ dialog label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var
     <button data-tab="mapa">Mapa</button>
     <button data-tab="intel">Inteligência</button>
     <button data-tab="msg">Mensagens</button>
+    <button data-tab="guia">Guia</button>
   </nav>
 </header>
 <main>
@@ -139,6 +140,7 @@ dialog label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var
   </section>
   <section id="tab-intel" hidden></section>
   <section id="tab-msg" hidden></section>
+  <section id="tab-guia" hidden></section>
 </main>
 
 <dialog id="dlgSetup">
@@ -367,7 +369,8 @@ function card(a){const L=lead(a.id);const tags=[];
   <div class="acoes"><a class="btn" href="${esc(safeUrl(a.link))}" target="_blank" rel="noopener">Anúncio</a>
    <button class="btn wpp" data-act="wpp">WhatsApp</button>
    <select data-act="status" style="border-color:${STM[L.status].cor}">${STATUS.map(([k,n])=>`<option value="${k}"${L.status===k?' selected':''}>${n}</option>`).join('')}</select>
-   <button class="btn" data-act="crm">${aberto?'▴':'CRM ▾'}</button></div>
+   <button class="btn" data-act="crm">${aberto?'▴':'CRM ▾'}</button>
+   <button class="btn" data-act="sim" title="Simular financiamento deste imóvel">Simular</button></div>
   <div class="crm"${aberto?'':' hidden'}>
    <label>Contato é<select data-f="contato"><option value="">?</option><option value="proprietario"${L.contato==='proprietario'?' selected':''}>Proprietário</option><option value="corretor"${L.contato==='corretor'?' selected':''}>Corretor/imobiliária</option></select></label>
    <label>Nome<input data-f="nome" value="${esc(L.nome)}"></label>
@@ -500,9 +503,89 @@ function renderMsg(){const C=CRM.config||{},M=modelos();const ex=ADS.find(a=>a.a
   <div class="panel"><h3>Respostas prontas</h3>${RESPOSTAS.map(([p,r],i)=>`<div class="resp"><b>${esc(p)}</b><span>${esc(preencher(r,ex,{}))}</span> <button class="btn" data-copy="${i}">copiar</button></div>`).join('')}
    <p class="mut">Nada aqui é disparo automático: cada mensagem sai do seu WhatsApp, uma por vez.</p></div>`}
 
+/* ---------- guia: simulador de financiamento e etapas da venda ---------- */
+// referencias publicas conferidas em 08/10/2026; todas editaveis no simulador
+const REF={taxa:11.19,teto_sfh:2250000,cota:80,comprom:30,idade_max:80.5,prazo_max:420,itbi:3,itbi_sfh:0.5,cartorio:1.2,avaliacao:3500,tarifa:25};
+const SIM_PADRAO={valor:900000,entrada:20,renda:25000,taxa:REF.taxa,prazo:420,idade:40,fgts:0,sistema:'sac'};
+const brl=v=>'R$ '+Math.round(v).toLocaleString('pt-BR');
+function calcSim(s){
+  const i=Math.pow(1+s.taxa/100,1/12)-1;
+  const prazoIdade=Math.max(0,Math.floor((REF.idade_max-s.idade)*12));
+  const n=Math.max(1,Math.min(s.prazo,REF.prazo_max,prazoIdade||1));
+  const entrada=Math.max(s.valor*s.entrada/100,s.valor*(1-REF.cota/100));
+  const fin=Math.max(0,s.valor-entrada);
+  const seguro=fin*0.0004+REF.tarifa;                       // MIP+DFI+tarifa, estimativa
+  const sac1=fin/n+fin*i+seguro, sacN=fin/n+(fin/n)*i+seguro;
+  const price=(i?fin*i/(1-Math.pow(1+i,-n)):fin/n)+seguro;
+  const p1=s.sistema==='sac'?sac1:price;
+  const sfh=s.valor<=REF.teto_sfh;
+  const itbi=sfh?fin*REF.itbi_sfh/100+(s.valor-fin)*REF.itbi/100:s.valor*REF.itbi/100;
+  const cartorio=s.valor*REF.cartorio/100;
+  const bolso=entrada-s.fgts+itbi+cartorio+REF.avaliacao;
+  // quanto a renda compra: maior financiamento cuja 1a parcela cabe em 30% da renda
+  const cabe=s.renda*REF.comprom/100-REF.tarifa;
+  const k=s.sistema==='sac'?(1/n+i+0.0004):((i?i/(1-Math.pow(1+i,-n)):1/n)+0.0004);
+  const finMax=Math.max(0,cabe/k);
+  return {i,n,prazoIdade,entrada,fin,seguro,sac1,sacN,price,p1,sfh,itbi,cartorio,bolso,
+    rendaMin:p1/(REF.comprom/100),finMax,imovelMax:finMax/(REF.cota/100),jurosTot:s.sistema==='sac'?fin*i*(n+1)/2:price*n-fin-seguro*n};
+}
+const ETAPAS=[
+ ['1. Captação (seu lado)',`Visita ao imóvel e conversa com o proprietário. Peça matrícula atualizada do Registro de Imóveis (até 30 dias), carnê do IPTU, declaração de quitação do condomínio, planta e habite-se quando houver. Defina o preço com base nos comparáveis do painel (R$/m² do bairro) e formalize a autorização de venda, de preferência com exclusividade e prazo.`],
+ ['2. Visita e proposta',`Visitas acompanhadas, com ficha de visita assinada. A proposta deve ser por escrito: preço, forma de pagamento (à vista, financiamento, FGTS, permuta), valor do sinal, prazo para assinatura e o que fica no imóvel. O vendedor aceita, recusa ou contrapropõe por escrito.`],
+ ['3. Análise documental',`Antes do sinal, levante as certidões. Do imóvel: matrícula com ônus e ações, IPTU sem débito, condomínio quitado. Dos vendedores (e cônjuges): distribuidores cíveis e de execuções (estadual e federal), Justiça do Trabalho, protesto, débitos federais. O banco refaz essa análise quando há financiamento.`],
+ ['4. Contrato e sinal',`Contrato particular de promessa de compra e venda, com sinal (arras), cláusulas de prazo, multa, condição de aprovação do crédito e data de entrega das chaves. A comissão costuma ser paga pelo vendedor na assinatura ou no recebimento, conforme a autorização de venda.`],
+ ['5a. Caminho com financiamento',`Comprador envia documentos de renda ao banco e recebe a aprovação de crédito (vale uns 90 a 180 dias). O banco manda um engenheiro avaliar o imóvel (o banco financia sobre o menor valor entre avaliação e preço) e faz a análise jurídica. Depois: assinatura do contrato do banco, que tem força de escritura; pagamento do ITBI; registro na matrícula; e o banco libera o dinheiro ao vendedor após o registro. Da proposta ao dinheiro na conta, conte de 30 a 90 dias.`],
+ ['5b. Caminho à vista',`Escritura pública em tabelionato de notas, pagamento do ITBI antes da escritura e registro no Registro de Imóveis. Só com o registro o comprador vira dono. Costuma levar de 15 a 30 dias.`],
+ ['5c. Uso do FGTS',`Pode compor entrada, abater saldo ou parcelas. Regras principais: 3 anos de trabalho com FGTS (somando períodos), não ter outro imóvel residencial na cidade onde mora ou trabalha nem financiamento ativo no SFH em qualquer lugar do país, imóvel residencial urbano para moradia própria e dentro do teto do SFH (R$ 2,25 mi desde out/2025). Precisa passar pelo banco.`],
+ ['5d. Outros caminhos',`Consórcio contemplado (carta de crédito funciona como pagamento à vista para o vendedor, com análise do imóvel pela administradora). Permuta (parte do pagamento em outro imóvel; exige avaliar os dois). Parcelamento direto com o proprietário, com garantia (alienação fiduciária ou hipoteca) registrada na matrícula.`],
+ ['6. Entrega',`Vistoria final, entrega das chaves conforme contrato, troca de titularidade de luz, gás e condomínio, e IPTU proporcional acertado entre as partes.`]];
+const QUEM_PAGA=[
+ ['Comprador',`Entrada; ITBI (Porto Alegre: 3%; no SFH, 0,5% sobre a parte financiada e 3% sobre o restante); registro na matrícula e, se for à vista, escritura (tabelas dos cartórios do RS, na faixa de 1% a 1,5% do valor somando tudo); tarifa de avaliação do banco (em torno de R$ 3 mil a R$ 3,5 mil); seguros MIP e DFI e tarifa mensal junto com as parcelas.`],
+ ['Vendedor',`Comissão de corretagem (costume de mercado, negociável e definida na autorização de venda); certidões pessoais; quitação de IPTU e condomínio até a entrega; imposto de renda sobre ganho de capital, de 15% a 22,5% sobre o lucro, com isenções (único imóvel vendido por até R$ 440 mil sem outra venda em 5 anos, ou reaplicação do valor em outro imóvel residencial em até 180 dias).`]];
+function renderGuia(){
+  const s={...SIM_PADRAO,...LS.get('painel_sim',{})};
+  const campo=(k,t,extra='')=>`<label>${t}<input type="number" step="any" data-sim="${k}" value="${s[k]}" ${extra}></label>`;
+  $('#tab-guia').innerHTML=`<div class="panel"><h3>Simulador de financiamento</h3>
+   <div class="fgrid">${campo('valor','Valor do imóvel (R$)')}${campo('entrada','Entrada (%)')}${campo('fgts','FGTS disponível (R$)')}
+    ${campo('renda','Renda bruta familiar (R$/mês)')}${campo('taxa','Juros (% a.a., sem TR)')}${campo('prazo','Prazo (meses)')}${campo('idade','Idade do comprador mais velho')}
+    <label>Sistema<select data-sim="sistema"><option value="sac"${s.sistema==='sac'?' selected':''}>SAC (parcela cai)</option><option value="price"${s.sistema==='price'?' selected':''}>Price (parcela fixa)</option></select></label></div>
+   <div id="simRes"></div>
+   <div class="bar"><button class="btn" id="simCopiar">Copiar resumo para o cliente</button><button class="btn" id="simPadrao">Voltar aos valores padrão</button></div>
+   <p class="mut">Estimativa para conversa inicial, não é proposta de banco. Seguros e tarifa estimados em 0,04% do saldo + R$ ${REF.tarifa}/mês; a TR (hoje perto de zero) fica de fora. Referências públicas de 08/10/2026: Caixa a partir de ${String(REF.taxa).replace('.',',')}% a.a. + TR no SFH, até ${REF.cota}% do valor no imóvel usado (SAC), parcela até ${REF.comprom}% da renda, prazo até 35 anos com idade + prazo até 80 anos e 6 meses, teto do SFH de R$ 2,25 mi (Resolução CMN 5.255/2025). Cada banco tem taxa e cota próprias: confira no simulador oficial antes de prometer número ao cliente.</p></div>
+  <div class="panel"><h3>Etapas da venda</h3>${ETAPAS.map(([t,x])=>`<details class="box"><summary><b>${esc(t)}</b></summary><p>${esc(x)}</p></details>`).join('')}</div>
+  <div class="panel"><h3>Quem paga o quê</h3>${QUEM_PAGA.map(([t,x])=>`<div class="resp"><b>${esc(t)}</b><br><span>${esc(x)}</span></div>`).join('')}
+   <p class="mut">Simuladores oficiais: <a class="lk" href="https://www.caixa.gov.br/voce/habitacao/simulador-de-habitacao" target="_blank" rel="noopener">Caixa</a> · <a class="lk" href="https://www.bb.com.br/site/pra-voce/financiamentos/financiamento-imobiliario/" target="_blank" rel="noopener">Banco do Brasil</a> · <a class="lk" href="https://www.itau.com.br/emprestimos-financiamentos/credito-imobiliario" target="_blank" rel="noopener">Itaú</a> · <a class="lk" href="https://www.santander.com.br/creditos-e-financiamentos/financiamento-imobiliario" target="_blank" rel="noopener">Santander</a> · <a class="lk" href="https://www.bradesco.com.br/html/classic/produtos-servicos/emprestimo-e-financiamento/imoveis/index.shtm" target="_blank" rel="noopener">Bradesco</a> · <a class="lk" href="https://www.sicredi.com.br/site/credito/financiamento-imobiliario/" target="_blank" rel="noopener">Sicredi</a>. ITBI de Porto Alegre: guia emitida no site da Secretaria da Fazenda. Valores de cartório e prazos são médias; confira caso a caso.</p></div>`;
+  const atualizar=()=>{const v={};$$('#tab-guia [data-sim]').forEach(e=>v[e.dataset.sim]=e.dataset.sim==='sistema'?e.value:(+e.value||0));
+    LS.set('painel_sim',v);const r=calcSim(v);
+    const linha=(t,x,cl='')=>`<tr${cl}><td>${t}</td><td><b>${x}</b></td></tr>`;
+    $('#simRes').innerHTML=`<table style="margin-top:8px">
+     ${linha('Entrada (mínimo de '+(100-REF.cota)+'%)',brl(r.entrada))}${linha('Valor financiado',brl(r.fin))}
+     ${linha('Prazo usado',r.n+' meses'+(r.n<v.prazo?' (limitado pela idade)':''))}
+     ${v.sistema==='sac'?linha('1ª parcela (SAC)',brl(r.sac1))+linha('Última parcela (SAC)',brl(r.sacN)):linha('Parcela (Price)',brl(r.price))}
+     ${linha('Renda bruta mínima',brl(r.rendaMin),r.rendaMin>v.renda?' style="color:var(--bad)"':' style="color:var(--ok)"')}
+     ${linha('Juros pagos no total (aprox.)',brl(r.jurosTot))}
+     ${linha('ITBI Porto Alegre'+(r.sfh?' (com redução do SFH)':' (fora do SFH, 3%)'),brl(r.itbi))}
+     ${linha('Cartório e registro (estimativa '+String(REF.cartorio).replace('.',',')+'%)',brl(r.cartorio))}
+     ${linha('Avaliação do banco (aprox.)',brl(REF.avaliacao))}
+     ${linha('Dinheiro necessário no fechamento (já tirando o FGTS)',brl(r.bolso))}
+     ${linha('Com essa renda, financia até',brl(r.finMax))}${linha('Imóvel máximo com '+(100-REF.cota)+'% de entrada',brl(r.imovelMax))}</table>
+     ${r.sfh?'':'<p class="mut">Acima de R$ 2,25 mi o imóvel sai do SFH: não usa FGTS, e as condições passam a ser do SFI, combinadas com cada banco.</p>'}`;
+    $('#simCopiar').onclick=()=>{navigator.clipboard?.writeText(`Simulação aproximada (sujeita à análise do banco)
+Imóvel: ${brl(v.valor)}
+Entrada: ${brl(r.entrada)}${v.fgts?` (pode usar ${brl(v.fgts)} do FGTS)`:''}
+Financiado: ${brl(r.fin)} em ${r.n} meses, ${v.sistema==='sac'?'SAC':'Price'}, juros de ${String(v.taxa).replace('.',',')}% ao ano
+${v.sistema==='sac'?`1ª parcela: ${brl(r.sac1)}, caindo até ${brl(r.sacN)}`:`Parcela: ${brl(r.price)}`}
+Renda bruta familiar mínima: ${brl(r.rendaMin)}
+Custos de compra (ITBI, cartório e avaliação): ${brl(r.itbi+r.cartorio+REF.avaliacao)}`);$('#simCopiar').textContent='copiado';setTimeout(()=>$('#simCopiar').textContent='Copiar resumo para o cliente',1500)};
+  };
+  $$('#tab-guia [data-sim]').forEach(e=>e.oninput=atualizar);
+  $('#simPadrao').onclick=()=>{LS.set('painel_sim',SIM_PADRAO);renderGuia()};
+  atualizar();
+}
+
 function renderTudo(){montarFiltros();renderLista();const ab=$('nav button.on').dataset.tab;if(ab!=='anuncios')mostrar(ab)}
 function mostrar(tab){$$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));$$('main>section').forEach(s=>s.hidden=s.id!=='tab-'+tab);
-  if(tab==='anuncios')renderLista();if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();window.scrollTo(0,0)}
+  if(tab==='anuncios')renderLista();if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();if(tab==='guia')renderGuia();window.scrollTo(0,0)}
 function irPara(id){F=filtrosPadrao();F.status='';LS.set('painel_filtros',F);mostrar('anuncios');montarFiltros();
   const a=ADS.find(x=>x.id===id);if(!a)return;abertos.add(id);$('#lista').innerHTML=card(a);$('#contagem').textContent='1 anúncio (toque em Limpar filtros para voltar à lista)';$('#btnMais').hidden=true}
 function irBairro(b){F=filtrosPadrao();F.bairros=[b];F.ordem='score';LS.set('painel_filtros',F);montarFiltros();mostrar('anuncios')}
@@ -521,6 +604,7 @@ document.addEventListener('click',e=>{const t=e.target;
   if(t.dataset.copy!==undefined){navigator.clipboard?.writeText(t.previousElementSibling.textContent);t.textContent='copiado';return}
   const c=t.closest('.card');if(!c)return;const id=c.dataset.id;
   if(t.dataset.act==='wpp')abrirWpp(id);
+  if(t.dataset.act==='sim'){const a=ADS.find(x=>x.id===id);if(a){LS.set('painel_sim',{...SIM_PADRAO,...LS.get('painel_sim',{}),valor:a.preco});mostrar('guia')}}
   if(t.dataset.act==='crm'){abertos.has(id)?abertos.delete(id):abertos.add(id);rerenderCard(id)}
   if(t.dataset.act==='remover'){const x=CRM.extras[id];if(x){x.removido=true;x.atualizado=Date.now();salvar();preparar();renderLista()}}
 });
