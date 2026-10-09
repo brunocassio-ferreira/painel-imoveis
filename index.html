@@ -31,6 +31,11 @@ details.box summary{cursor:pointer;font-weight:600}
 .fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:8px}
 .fgrid label{display:flex;flex-direction:column;font-size:12px;color:var(--mut);gap:2px}
 .fgrid label.ck{flex-direction:row;align-items:center;gap:6px;color:var(--tx);font-size:14px}
+.fgrid2{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:8px}
+.fgrid2 input{min-width:0}
+details.mais{margin-top:10px;border-top:1px solid var(--ln);padding-top:8px}
+details.mais summary{cursor:pointer;font-weight:600;color:var(--acc)}
+#barraRapida{padding:8px 12px}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .chip{border:1px solid var(--ln);background:var(--chip);border-radius:20px;padding:4px 10px;font-size:13px;cursor:pointer}
 .chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
@@ -100,35 +105,44 @@ dialog label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var
 </header>
 <main>
   <section id="tab-anuncios">
-    <details class="box" id="boxFiltros">
-      <summary>Filtros <span id="resumoF" class="mut"></span></summary>
-      <p class="mut" style="margin:6px 0 0">Período escolhe um só. Nas outras linhas dá para marcar vários; nada marcado vale como todos.</p>
-      <div class="chips" id="fPeriodo"></div>
-      <div class="chips" id="fBairros"></div>
-      <div class="chips" id="fStatus"></div>
-      <div class="chips" id="fFonte"></div>
-      <div class="chips" id="fTipo"></div>
-      <div class="chips" id="fQts"></div>
-      <div class="fgrid">
-        <label>Busca<input id="fTexto" placeholder="rua, código, site"></label>
-        <label>Anunciante<select id="fAnunc"><option value="">Todos</option><option value="prop">Proprietário direto</option><option value="imob">Imobiliária ou corretor</option></select></label>
-        <label>Preço mín. (mil)<input id="fPmin" type="number" inputmode="numeric"></label>
-        <label>Preço máx. (mil)<input id="fPmax" type="number" inputmode="numeric"></label>
-        <label>m² mín.<input id="fAmin" type="number" inputmode="numeric"></label>
-        <label>m² máx.<input id="fAmax" type="number" inputmode="numeric"></label>
-        <label>Ordenar<select id="fOrdem">
+    <div class="box" id="barraRapida">
+      <div class="chips" id="fAtalhos" style="margin-top:0"></div>
+      <div class="fgrid2">
+        <input id="fTexto" placeholder="Buscar por rua, código ou site">
+        <select id="fOrdem" aria-label="Ordenar">
           <option value="rec">Mais recentes</option><option value="score">Maior oportunidade</option>
           <option value="pdesc">Maior preço</option><option value="pasc">Menor preço</option>
-          <option value="m2asc">R$/m² mais baixo</option><option value="m2desc">R$/m² mais alto</option></select></label>
-        <label class="ck"><input type="checkbox" id="fMulti"> Em 2 ou mais sites</label>
-        <label class="ck"><input type="checkbox" id="fQueda"> Baixou o preço</label>
-        <label class="ck"><input type="checkbox" id="fFollow"> Follow-up vencido</label>
-        <label class="ck"><input type="checkbox" id="fSemBase"> Esconder estoque inicial</label>
-        <label class="ck"><input type="checkbox" id="fMaduro"> Proprietário há 45+ dias no ar</label>
+          <option value="m2asc">R$/m² mais baixo</option><option value="m2desc">R$/m² mais alto</option></select>
       </div>
+    </div>
+    <details class="box" id="boxFiltros">
+      <summary>Filtrar <span id="resumoF" class="mut"></span></summary>
+      <p class="mut" style="margin:6px 0 0">Em cada linha dá para marcar vários; sem marcar vale como todos.</p>
+      <div class="chips" id="fPeriodo"></div>
+      <div class="chips" id="fBairros"></div>
+      <div class="chips" id="fPreco"></div>
+      <div class="chips" id="fQts"></div>
+      <details class="mais">
+        <summary>Mais filtros</summary>
+        <div class="chips" id="fStatus"></div>
+        <div class="chips" id="fFonte"></div>
+        <div class="chips" id="fTipo"></div>
+        <div class="fgrid">
+          <label>Anunciante<select id="fAnunc"><option value="">Todos</option><option value="prop">Proprietário direto</option><option value="imob">Imobiliária ou corretor</option></select></label>
+          <label>Preço mín. (mil)<input id="fPmin" type="number" inputmode="numeric"></label>
+          <label>Preço máx. (mil)<input id="fPmax" type="number" inputmode="numeric"></label>
+          <label>m² mín.<input id="fAmin" type="number" inputmode="numeric"></label>
+          <label>m² máx.<input id="fAmax" type="number" inputmode="numeric"></label>
+          <label class="ck"><input type="checkbox" id="fMulti"> Em 2 ou mais sites</label>
+          <label class="ck"><input type="checkbox" id="fQueda"> Baixou o preço</label>
+          <label class="ck"><input type="checkbox" id="fFollow"> Follow-up vencido</label>
+          <label class="ck"><input type="checkbox" id="fSemBase"> Esconder estoque inicial</label>
+          <label class="ck"><input type="checkbox" id="fMaduro"> Proprietário há 45+ dias no ar</label>
+        </div>
+      </details>
       <div class="bar"><button class="btn" id="btnLimpar">Limpar filtros</button></div>
     </details>
-    <div class="bar"><span id="contagem" class="grow mut"></span><button class="btn" id="btnPdf" title="Abre a lista filtrada pronta para salvar em PDF ou imprimir">PDF da lista</button><button class="btn" id="btnManual">+ Imóvel manual</button></div>
+    <div class="bar"><span id="contagem" class="grow mut"></span><button class="btn" id="btnLimpar2" hidden>Limpar</button><button class="btn" id="btnPdf" title="Abre a lista filtrada pronta para salvar em PDF ou imprimir">PDF da lista</button><button class="btn" id="btnManual">+ Imóvel manual</button></div>
     <div id="lista"></div>
     <div class="bar"><button class="btn" id="btnMais" hidden>Mostrar mais</button></div>
   </section>
@@ -321,13 +335,21 @@ const CHECKS={fMulti:'multi',fQueda:'queda',fFollow:'follow',fSemBase:'semBase',
 const CAMPOS={fTexto:'texto',fAnunc:'anunc',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fOrdem:'ordem'};
 function grupo(id,rot,k,ops){$('#'+id).innerHTML=`<b class="lbl">${rot}</b>`+ops.map(([v,t])=>
   `<span class="chip${F[k].includes(v)?' on':''}" data-g="${k}" data-v="${esc(v)}">${esc(t)}</span>`).join('')}
+const FAIXAS=[['','','Qualquer'],['500','800','500 a 800 mil'],['800','1500','800 mil a 1,5 mi'],['1500','3000','1,5 a 3 mi'],['3000','','Acima de 3 mi']];
+// atalhos de um toque: os recortes mais usados na rotina de agenciamento
+const ATALHOS=[['hoje','Novos hoje',f=>f.periodo==='0'],['prop','Proprietário direto',f=>f.anunc==='prop'],['maduro','Dono há 45+ dias no ar',f=>f.maduro],
+  ['queda','Baixou o preço',f=>f.queda],['multi','Em 2+ sites',f=>f.multi],['follow','Follow-up vencido',f=>f.follow]];
+function atalho(id){const A={hoje:()=>F.periodo=F.periodo==='0'?'':'0',prop:()=>F.anunc=F.anunc==='prop'?'':'prop',maduro:()=>F.maduro=!F.maduro,
+  queda:()=>F.queda=!F.queda,multi:()=>F.multi=!F.multi,follow:()=>F.follow=!F.follow};A[id]();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()}
 function montarFiltros(){
   $('#fPeriodo').innerHTML='<b class="lbl">Período</b>'+PERIODOS.map(([v,t])=>`<span class="chip${F.periodo===v?' on':''}" data-p="${v}">${t}</span>`).join('');
   grupo('fBairros','Bairro','bairros',BAIRROS.map(([b])=>[b,b]));
-  grupo('fStatus','Status','status',[['ativos','Ativos (sem descartados e agenciados)'],...STATUS.map(([k,n])=>[k,n])]);
+  grupo('fStatus','Status','status',[['ativos','Ativos'],...STATUS.map(([k,n])=>[k,n])]);
   grupo('fFonte','Site','fonte',OPC.fonte.map(f=>[f,f]));
   grupo('fTipo','Tipo','tipo',OPC.tipo.map(t=>[t,t]));
   grupo('fQts','Quartos','qts',[['1','1'],['2','2'],['3','3'],['4','4 ou mais']]);
+  $('#fPreco').innerHTML='<b class="lbl">Preço</b>'+FAIXAS.map(([mn,mx,t])=>`<span class="chip${String(F.pmin)===mn&&String(F.pmax)===mx?' on':''}" data-band="${mn}|${mx}">${t}</span>`).join('');
+  $('#fAtalhos').innerHTML=ATALHOS.map(([id,t,on])=>`<span class="chip${on(F)?' on':''}" data-at="${id}">${t}</span>`).join('');
   const m=CAMPOS;
   for(const [id,k] of Object.entries(m))$('#'+id).value=F[k]??'';
   for(const [id,k] of Object.entries(CHECKS))$('#'+id).checked=F[k];
@@ -368,7 +390,7 @@ function filtrar(){
 function renderLista(){
   const r=filtrar(),P=filtrosPadrao();const ativos=Object.keys(P).filter(k=>k!=='ordem'&&JSON.stringify(F[k])!==JSON.stringify(P[k])).length;
   $('#resumoF').textContent=ativos?`(${ativos} ativos)`:'';
-  $('#contagem').textContent=`${r.length} de ${ADS.length} anúncios`;
+  $('#contagem').textContent=`${r.length} de ${ADS.length} anúncios`;$('#btnLimpar2').hidden=!ativos;
   $('#lista').innerHTML=r.slice(0,limite).map(card).join('')||'<p class="mut">Nenhum anúncio com esses filtros.</p>';
   $('#btnMais').hidden=r.length<=limite}
 function card(a){const L=lead(a.id);const tags=[];
@@ -645,6 +667,8 @@ document.addEventListener('click',e=>{const t=e.target;
   if(t.dataset.ir){irPara(t.dataset.ir);return}
   if(t.dataset.irb){mapa&&mapa.closePopup();irBairro(t.dataset.irb);return}
   if(t.dataset.p!==undefined&&t.closest('#fPeriodo')){F.periodo=t.dataset.p;LS.set('painel_filtros',F);montarFiltros();renderLista();return}
+  if(t.dataset.at){atalho(t.dataset.at);return}
+  if(t.dataset.band!==undefined){[F.pmin,F.pmax]=t.dataset.band.split('|');LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista();return}
   if(t.dataset.g&&t.closest('#boxFiltros')){alternar(t.dataset.g,t.dataset.v);return}
   if(t.dataset.copy!==undefined){navigator.clipboard?.writeText(t.previousElementSibling.textContent);t.textContent='copiado';return}
   const c=t.closest('.card');if(!c)return;const id=c.dataset.id;
@@ -658,9 +682,9 @@ document.addEventListener('change',e=>{const t=e.target,c=t.closest('.card');
   if(c&&t.dataset.f){const L=leadMut(c.dataset.id);L[t.dataset.f]=t.value;
     if(t.dataset.f==='motivo'&&t.value&&L.status!=='descartado')mudarStatus(c.dataset.id,'descartado');
     L.atualizado=Date.now();salvar();if(t.dataset.f==='motivo')rerenderCard(c.dataset.id);return}
-  if(t.closest('#boxFiltros'))lerFiltros()});
+  if(t.closest('#boxFiltros,#barraRapida'))lerFiltros()});
 $('#fTexto').addEventListener('input',()=>{clearTimeout(window._ft);window._ft=setTimeout(lerFiltros,300)});
-$('#btnLimpar').onclick=()=>{F=filtrosPadrao();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};
+$('#btnLimpar').onclick=$('#btnLimpar2').onclick=()=>{F=filtrosPadrao();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};
 $('#btnMais').onclick=()=>{limite+=40;renderLista()};
 $('#btnReload').onclick=carregar;$('#btnCfg').onclick=()=>abrirSetup('');
 $('#mMetrica').onchange=renderMapa;
