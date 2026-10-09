@@ -44,7 +44,7 @@ details.box summary{cursor:pointer;font-weight:600}
 .b1{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .tag{font-size:11px;padding:2px 7px;border-radius:10px;background:var(--chip);color:var(--tx);font-weight:600}
 .tag.hoje{background:#d62828;color:#fff}.tag.novo{background:#f4a261;color:#222}.tag.prop{background:var(--ok);color:#fff}
-.tag.multi{background:var(--blue);color:#fff}.tag.queda{background:#6a3fa0;color:#fff}.tag.est{background:var(--chip);color:var(--mut);font-weight:400}
+.tag.multi{background:var(--blue);color:#fff}.tag.mad{background:#0e7490;color:#fff}.tag.queda{background:#6a3fa0;color:#fff}.tag.est{background:var(--chip);color:var(--mut);font-weight:400}
 .score{margin-left:auto;font-weight:700;font-size:13px;border-radius:12px;padding:2px 8px;color:#fff;cursor:help}
 .preco{font-size:19px;font-weight:700}.preco s{font-size:13px;color:var(--mut);font-weight:400;margin-left:6px}
 .det,.datas{color:var(--mut);font-size:13px}.loc{font-size:14px}
@@ -124,6 +124,7 @@ dialog label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var
         <label class="ck"><input type="checkbox" id="fQueda"> Baixou o preço</label>
         <label class="ck"><input type="checkbox" id="fFollow"> Follow-up vencido</label>
         <label class="ck"><input type="checkbox" id="fSemBase"> Esconder estoque inicial</label>
+        <label class="ck"><input type="checkbox" id="fMaduro"> Proprietário há 45+ dias no ar</label>
       </div>
       <div class="bar"><button class="btn" id="btnLimpar">Limpar filtros</button></div>
     </details>
@@ -196,21 +197,24 @@ const BAIRROS=[['Moinhos de Vento',-30.0262,-51.2018,'no'],['Bela Vista',-30.035
 const PREP=Object.fromEntries(BAIRROS.map(b=>[b[0],b[3]]));
 const PORTAIS=['ZAP','OLX (proprietário)'];
 const STATUS=[['novo','Novo','#8a8a8a'],['verificar','Checar no CRM','#b07d1a'],['acionado','Acionado','#1f6fb2'],
- ['sem_resposta','Sem resposta','#b23a3a'],['respondeu','Respondeu','#2e7d32'],['negociando','Em negociação','#6a3fa0'],
+ ['sem_resposta','Sem resposta','#b23a3a'],['respondeu','Respondeu','#2e7d32'],['avaliacao','Avaliação marcada','#0e7490'],['negociando','Em negociação','#6a3fa0'],
  ['agenciado','Agenciado','#0b7a5a'],['descartado','Descartado','#555']];
 const STM=Object.fromEntries(STATUS.map(s=>[s[0],{nome:s[1],cor:s[2]}]));
-const ACIONADOS=['acionado','sem_resposta','respondeu','negociando','agenciado'];
-const RESPOSTA=['respondeu','negociando','agenciado'];
+const ACIONADOS=['acionado','sem_resposta','respondeu','avaliacao','negociando','agenciado'];
+const RESPOSTA=['respondeu','avaliacao','negociando','agenciado'];
+const AVALIOU=['avaliacao','negociando','agenciado'];
+const MADURO=45;   // dias no ar a partir dos quais o proprietario que vende sozinho costuma aceitar ajuda (6 a 12 semanas, NAR)
 const MOTIVOS=['Exclusividade vigente','Já está na Auxiliadora','Fora do perfil','Preço fora da realidade','Não quer corretor','Já vendido','Sem contato disponível','Duplicado','Outro'];
 const PERIODOS=[['','Todos'],['0','Hoje'],['3','3 dias'],['7','7 dias'],['30','30 dias']];
 
 const MODELOS_PADRAO={
- proprietario:{titulo:'Quebra-gelo com proprietário (primeira mensagem)',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, corretor aqui da região. Vi o seu anúncio do {tipo} {no_bairro}. Ele ainda está disponível?'},
+ proprietario:{titulo:'Quebra-gelo com proprietário (primeira mensagem)',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, da {agencia}, e acompanho os imóveis {no_bairro}. Vi o seu anúncio do {tipo}. Ele ainda está disponível?'},
+ maduro:{titulo:'Proprietário com anúncio há semanas no ar',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, da {agencia}, e acompanho os imóveis {no_bairro}. Vi que o seu {tipo} {descricao} está anunciado há algumas semanas. Se for útil, te mando um resumo de como ele está em relação aos parecidos da região, com os valores pedidos. Sem compromisso nenhum.'},
  apresentacao:{titulo:'Proprietário respondeu: apresentação',texto:'Que bom! Trabalho com imóveis {no_bairro} e arredores pela {agencia}. Gostei do seu {tipo} e acho que ele tem tudo para chamar atenção de quem procura na região.\n\nSe você topar, posso dar uma passada para conhecer e te mostrar como ele está em relação aos anúncios parecidos. Sem compromisso nenhum. Que dia costuma ser melhor para você?'},
- parceria:{titulo:'Quebra-gelo com corretor ou imobiliária',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, corretor da {agencia}. Vi o anúncio de vocês do {tipo} {descricao} {no_bairro}. Ele ainda está disponível? Vocês trabalham com parceria?'},
+ parceria:{titulo:'Quebra-gelo com corretor ou imobiliária',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, da {agencia}. Vi o anúncio de vocês do {tipo} {descricao} {no_bairro}. Ele ainda está disponível? Vocês trabalham com parceria?'},
  followup:{titulo:'Retomada sem resposta (3 a 5 dias)',texto:'Olá{saudacao}! Passando só para retomar a mensagem sobre o {tipo} {no_bairro}. Se a venda ainda estiver de pé e você quiser uma avaliação de mercado sem compromisso, fico à disposição. Se já resolveu, me avisa e eu encerro por aqui. Obrigado!'},
  visita:{titulo:'Marcar avaliação (depois de resposta positiva)',texto:'Que bom! Para preparar a avaliação, consigo visitar o {tipo} {no_bairro} num horário seu? Levo uma análise com os anúncios parecidos da região e os valores pedidos. A visita leva uns 30 a 40 minutos. Que dia fica melhor para você?'},
- preco:{titulo:'Anúncio que baixou de preço',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, corretor da {agencia}. Acompanho os anúncios {no_bairro} todos os dias e vi que o {tipo} {descricao} teve ajuste de preço recente. Posso te mostrar como ele está posicionado em relação aos parecidos da região. Se quiser, mando um resumo sem compromisso.'}
+ preco:{titulo:'Anúncio que baixou de preço',texto:'Olá{saudacao}! Tudo bem? Sou {meu_nome}, da {agencia}. Acompanho os anúncios {no_bairro} todos os dias e vi que o {tipo} {descricao} teve ajuste de preço recente. Posso te mostrar como ele está posicionado em relação aos parecidos da região. Se quiser, mando um resumo sem compromisso.'}
 };
 const RESPOSTAS=[
  ['"Quanto vocês cobram?"','Só é pago se a venda acontecer, e o valor depende do que a gente combinar para o seu imóvel. Prefiro te explicar com calma junto com a avaliação, assim você vê tudo de uma vez: divulgação, visitas, negociação e documentação até a escritura.'],
@@ -228,7 +232,7 @@ let ADS=[], MED={}, F=normF(LS.get('painel_filtros',null)), OPC={fonte:[],tipo:[
 const HOJE=new Date(), HOJE_ISO=isoLocal(HOJE);
 
 function novoCrm(){return {leads:{},extras:{},config:{},modelos:null}}
-function filtrosPadrao(){return {periodo:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:['ativos'],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',multi:false,queda:false,follow:false,semBase:false}}
+function filtrosPadrao(){return {periodo:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:['ativos'],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',multi:false,queda:false,follow:false,semBase:false,maduro:false}}
 // filtros salvos antes da escolha multipla guardavam texto simples em site, tipo, status e quartos
 function normF(f){f={...filtrosPadrao(),...(f||{})};for(const k of ['bairros','fonte','tipo','status','qts'])if(!Array.isArray(f[k]))f[k]=f[k]?[f[k]]:[];return f}
 function isoLocal(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`}
@@ -292,6 +296,8 @@ function preparar(){
   const extras=Object.values(CRM.extras||{}).filter(x=>!x.removido);
   ADS=[...DATA.anuncios,...extras].map(a=>{const m2=num(a.area_m2);return {...a,outros:a.outros||[],m2,pm2:m2?a.preco/m2:0,rec:a.publicado||a.visto,
     idade:dias(a.publicado||a.visto),estoque:a.base_inicial&&!a.publicado}});
+  // maduro: proprietario com data real de publicacao, no ar ha 45 dias ou mais e visto nas ultimas 2 semanas
+  for(const a of ADS)a.maduro=a.proprietario&&!!a.publicado&&a.idade>=MADURO&&dias(a.ultima||a.visto)<=14;
   MED={};for(const [b] of BAIRROS)MED[b]=mediana(ADS.filter(a=>a.bairro===b&&a.pm2).map(a=>a.pm2));
   const nomes=Object.fromEntries(ADS.map(a=>[a.id,a.fonte]));
   for(const a of ADS){a.outrosNomes=[...new Set(a.outros.map(i=>nomes[i]).filter(Boolean))];[a.score,a.motivos]=pontuar(a)}
@@ -303,6 +309,7 @@ function pontuar(a){let s=0;const r=[];
   if(a.proprietario){s+=30;r.push('proprietário direto (+30)')}
   if(a.outros.length){s+=20;r.push(`em ${a.outros.length+1} sites, sinal de que não há exclusividade (+20)`)}
   if(a.preco_inicial&&a.preco<a.preco_inicial){s+=15;r.push('baixou o preço (+15)')}
+  if(a.maduro){s+=15;r.push(`proprietário há ${a.idade} dias no ar, fase em que quem vende sozinho costuma aceitar ajuda (+15)`)}
   if(!a.estoque){if(a.idade<=3){s+=20;r.push('anúncio de até 3 dias (+20)')}else if(a.idade<=7){s+=12;r.push('anúncio desta semana (+12)')}else if(a.idade<=30){s+=5;r.push('anúncio do mês (+5)')}}
   if(a.pm2&&MED[a.bairro]&&a.pm2>MED[a.bairro]*1.15){s+=10;r.push('R$/m² 15% acima da mediana do bairro, abre conversa sobre avaliação (+10)')}
   if(a.preco>=1.5e6){s+=5;r.push('ticket a partir de R$ 1,5 mi (+5)')}
@@ -310,6 +317,7 @@ function pontuar(a){let s=0;const r=[];
 const corScore=s=>s>=50?'#b23a3a':s>=30?'#d97706':s>=15?'#b08d1a':'#8a8a8a';
 
 /* ---------- filtros e lista ---------- */
+const CHECKS={fMulti:'multi',fQueda:'queda',fFollow:'follow',fSemBase:'semBase',fMaduro:'maduro'};
 const CAMPOS={fTexto:'texto',fAnunc:'anunc',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fOrdem:'ordem'};
 function grupo(id,rot,k,ops){$('#'+id).innerHTML=`<b class="lbl">${rot}</b>`+ops.map(([v,t])=>
   `<span class="chip${F[k].includes(v)?' on':''}" data-g="${k}" data-v="${esc(v)}">${esc(t)}</span>`).join('')}
@@ -322,7 +330,7 @@ function montarFiltros(){
   grupo('fQts','Quartos','qts',[['1','1'],['2','2'],['3','3'],['4','4 ou mais']]);
   const m=CAMPOS;
   for(const [id,k] of Object.entries(m))$('#'+id).value=F[k]??'';
-  for(const [id,k] of Object.entries({fMulti:'multi',fQueda:'queda',fFollow:'follow',fSemBase:'semBase'}))$('#'+id).checked=F[k];
+  for(const [id,k] of Object.entries(CHECKS))$('#'+id).checked=F[k];
 }
 function alternar(k,v){let s=F[k].includes(v)?F[k].filter(x=>x!==v):[...F[k],v];
   // "Ativos" e um atalho: marcar ele limpa os status avulsos, marcar um status avulso desmarca "Ativos"
@@ -330,13 +338,14 @@ function alternar(k,v){let s=F[k].includes(v)?F[k].filter(x=>x!==v):[...F[k],v];
   F[k]=s;LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()}
 function lerFiltros(){
   for(const [id,k] of Object.entries(CAMPOS))F[k]=$('#'+id).value;
-  for(const [id,k] of Object.entries({fMulti:'multi',fQueda:'queda',fFollow:'follow',fSemBase:'semBase'}))F[k]=$('#'+id).checked;
+  for(const [id,k] of Object.entries(CHECKS))F[k]=$('#'+id).checked;
   LS.set('painel_filtros',F);limite=40;renderLista()}
 function filtrar(){
   const t=F.texto.trim().toLowerCase();
   let r=ADS.filter(a=>{const L=lead(a.id);
     if(F.periodo!==''&&(a.estoque||a.idade>+F.periodo))return false;
     if(F.semBase&&a.estoque)return false;
+    if(F.maduro&&!a.maduro)return false;
     if(F.bairros.length&&!F.bairros.includes(a.bairro))return false;
     if(F.anunc==='prop'&&!a.proprietario)return false;
     if(F.anunc==='imob'&&a.proprietario)return false;
@@ -369,6 +378,7 @@ function card(a){const L=lead(a.id);const tags=[];
   if(a.proprietario)tags.push('<span class="tag prop">proprietário</span>');
   if(a.outros.length)tags.push(`<span class="tag multi">${a.outros.length+1} sites</span>`);
   if(a.preco<a.preco_inicial)tags.push('<span class="tag queda">baixou</span>');
+  if(a.maduro)tags.push(`<span class="tag mad">${a.idade} dias no ar</span>`);
   if(a.manual)tags.push('<span class="tag">manual</span>');
   if(L.followup&&L.followup<=HOJE_ISO&&!['descartado','agenciado'].includes(L.status))tags.push('<span class="tag hoje">follow-up</span>');
   const det=[a.area_m2&&a.area_m2+' m²',a.quartos&&a.quartos+' qts',a.pm2&&money(a.pm2)+'/m²',a.tipo].filter(Boolean).join(' · ');
@@ -400,6 +410,7 @@ function rerenderCard(id){const el=$(`.card[data-id="${CSS.escape(id)}"]`);const
 function mudarStatus(id,s){const L=leadMut(id);if(L.status===s)return;
   L.hist=L.hist||[];L.hist.push({d:HOJE_ISO,s});L.status=s;
   if(ACIONADOS.includes(s)&&!L.acionado_em)L.acionado_em=HOJE_ISO;
+  if(AVALIOU.includes(s)&&!L.avaliacao_em)L.avaliacao_em=HOJE_ISO;
   if(RESPOSTA.includes(s)&&!L.respondeu_em)L.respondeu_em=HOJE_ISO;
   if(s==='acionado'&&!L.followup)L.followup=somaDias(3);
   if(['descartado','agenciado'].includes(s))L.followup='';
@@ -415,7 +426,7 @@ function preencher(t,a,L){const C=CRM.config||{};
   return t.replace(/\{(\w+)\}/g,(m,k)=>k in v?v[k]:m).replace(/ {2,}/g,' ').replace(/ ([,.)])/g,'$1')}
 function abrirWpp(id){wppId=id;const a=ADS.find(x=>x.id===id),L=lead(id),M=modelos();
   const pad=['acionado','sem_resposta'].includes(L.status)?'followup':RESPOSTA.includes(L.status)?'apresentacao':
-    (L.contato==='corretor'||(!a.proprietario&&L.contato!=='proprietario'))?'parceria':(a.preco<a.preco_inicial?'preco':'proprietario');
+    (L.contato==='corretor'||(!a.proprietario&&L.contato!=='proprietario'))?'parceria':(a.preco<a.preco_inicial?'preco':a.maduro?'maduro':'proprietario');
   $('#wModelo').innerHTML=Object.entries(M).map(([k,m])=>`<option value="${k}"${k===pad?' selected':''}>${esc(m.titulo)}</option>`).join('');
   $('#wTel').value=L.telefone||'';$('#wMarcar').checked=['novo','verificar','acionado','sem_resposta'].includes(L.status);
   textoWpp();$('#dlgWpp').showModal()}
@@ -447,14 +458,14 @@ function statsBairros(){
 function renderFunil(){
   const ids=new Set(ADS.map(a=>a.id));const Ls=Object.entries(CRM.leads).filter(([id])=>ids.has(id)).map(([id,L])=>({id,...L}));
   const c=k=>Ls.filter(L=>L.status===k).length;
-  const acion=Ls.filter(L=>L.acionado_em),resp=Ls.filter(L=>L.respondeu_em||RESPOSTA.includes(L.status));
+  const acion=Ls.filter(L=>L.acionado_em),resp=Ls.filter(L=>L.respondeu_em||RESPOSTA.includes(L.status)),aval=Ls.filter(L=>L.avaliacao_em||AVALIOU.includes(L.status));
   const semStatus=ADS.length-Ls.filter(L=>L.status!=='novo').length;
   const kpi=(v,t)=>`<div class="kpi"><b>${v}</b><span>${t}</span></div>`;
   const venc=Ls.filter(L=>L.followup&&L.followup<=HOJE_ISO&&!['descartado','agenciado'].includes(L.status));
   const motivos={};for(const L of Ls.filter(L=>L.status==='descartado'))motivos[L.motivo||'Sem motivo']=(motivos[L.motivo||'Sem motivo']||0)+1;
   const barra=(l,v,mx,txt)=>`<div class="hb"><span class="l">${esc(l)}</span><span class="t"><i style="width:${mx?100*v/mx:0}%"></i></span><span class="v">${txt??v}</span></div>`;
   const etapas=[['Na base',ADS.length],['Checados no CRM',Ls.filter(L=>L.status!=='novo').length],['Acionados',acion.length],['Responderam',resp.length],
-    ['Em negociação',c('negociando')+c('agenciado')],['Agenciados',c('agenciado')]];
+    ['Avaliação marcada',aval.length],['Em negociação',c('negociando')+c('agenciado')],['Agenciados',c('agenciado')]];
   const sem=[];for(let i=7;i>=0;i--){const d=new Date(HOJE);d.setDate(d.getDate()-((d.getDay()+6)%7)-7*i);const ini=isoLocal(d);d.setDate(d.getDate()+6);const fim=isoLocal(d);
     sem.push([br(ini),acion.filter(L=>L.acionado_em>=ini&&L.acionado_em<=fim).length])}
   const mxs=Math.max(1,...sem.map(s=>s[1]));
@@ -462,8 +473,9 @@ function renderFunil(){
     return [b,l.filter(L=>L.acionado_em).length,l.filter(L=>L.respondeu_em||RESPOSTA.includes(L.status)).length,l.filter(L=>L.status==='agenciado').length,l.filter(L=>L.status==='descartado').length]});
   const nome=id=>{const a=ADS.find(x=>x.id===id);return a?`${a.bairro} · ${mi(a.preco)} · ${a.fonte}`:id};
   $('#tab-funil').innerHTML=`<div class="kpis">${kpi(semStatus,'Sem tratamento')}${kpi(c('verificar'),'Checar no CRM')}${kpi(acion.length,'Acionados')}${kpi(resp.length,'Responderam')}
-   ${kpi(c('sem_resposta'),'Sem resposta')}${kpi(c('negociando'),'Em negociação')}${kpi(c('agenciado'),'Agenciados')}${kpi(c('descartado'),'Descartados')}
-   ${kpi(pct(resp.length,acion.length),'Taxa de resposta')}${kpi(pct(c('agenciado'),acion.length),'Acionado → agenciado')}</div>
+   ${kpi(c('sem_resposta'),'Sem resposta')}${kpi(aval.length,'Avaliações marcadas')}${kpi(c('negociando'),'Em negociação')}${kpi(c('agenciado'),'Agenciados')}${kpi(c('descartado'),'Descartados')}
+   ${kpi(pct(resp.length,acion.length),'Taxa de resposta')}${kpi(pct(aval.length,acion.length),'Acionado → avaliação (referência 5 a 15%)')}
+   ${kpi(pct(c('agenciado'),aval.length),'Avaliação → agenciado (referência 30 a 50%)')}${kpi(pct(c('agenciado'),acion.length),'Acionado → agenciado')}</div>
   <div class="panel"><h3>Funil</h3>${etapas.map(([l,v])=>barra(l,v,ADS.length)).join('')}</div>
   <div class="panel"><h3>Follow-ups vencidos ou para hoje (${venc.length})</h3>${venc.length?venc.sort((a,b)=>a.followup.localeCompare(b.followup)).map(L=>`<div class="hb"><a class="lk" data-ir="${esc(L.id)}">${esc(nome(L.id))}</a><span class="grow"></span><span class="mut">${br(L.followup)} · ${esc(STM[L.status]?.nome)}</span></div>`).join(''):'<p class="mut">Nada pendente.</p>'}</div>
   <div class="panel"><h3>Acionamentos por semana</h3>${sem.map(([l,v])=>barra('semana de '+l,v,mxs)).join('')}</div>
@@ -504,7 +516,7 @@ function renderIntel(){
   <div class="panel scroll"><h3>Concorrência monitorada</h3><table><tr><th>Imobiliária</th><th>Anúncios</th><th>Fatia</th><th>Bairros mais fortes</th><th>Ticket mediano</th></tr>
    ${ti.map(([n,v])=>`<tr><td>${esc(n)}</td><td>${v.n}</td><td>${pct(v.n,totI)}</td><td>${esc(Object.entries(v.b).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([b,k])=>`${b} (${k})`).join(', '))}</td><td>${mi(mediana(v.p))}</td></tr>`).join('')}</table>
    <p class="mut">ZAP e OLX ficam de fora desta tabela porque são portais com vários anunciantes.</p></div>
-  <div class="panel"><h3>Como o índice é calculado</h3><p class="mut">Cada anúncio soma pontos: proprietário direto +30; em 2 ou mais sites +20; baixou o preço +15; anúncio de até 3 dias +20, da semana +12, do mês +5; R$/m² 15% acima da mediana do bairro +10; ticket a partir de R$ 1,5 mi +5 (máximo 100). O índice do bairro é a soma dos pontos dos anúncios ativos, em escala de 0 a 100. A data usada é a de publicação quando o site informa; se não informa, é o dia em que o anúncio apareceu no radar.</p></div>`}
+  <div class="panel"><h3>Como o índice é calculado</h3><p class="mut">Cada anúncio soma pontos: proprietário direto +30; em 2 ou mais sites +20; baixou o preço +15; proprietário há 45 dias ou mais no ar +15 (nos EUA, a maioria de quem vende sozinho procura corretor entre 6 e 12 semanas); anúncio de até 3 dias +20, da semana +12, do mês +5; R$/m² 15% acima da mediana do bairro +10; ticket a partir de R$ 1,5 mi +5 (máximo 100). O índice do bairro é a soma dos pontos dos anúncios ativos, em escala de 0 a 100. A data usada é a de publicação quando o site informa; se não informa, é o dia em que o anúncio apareceu no radar.</p></div>`}
 
 function renderMsg(){const C=CRM.config||{},M=modelos();const ex=ADS.find(a=>a.area_m2&&a.quartos)||ADS[0]||{bairro:'Moinhos de Vento',preco:0,fonte:''};
   $('#tab-msg').innerHTML=`<div class="panel"><h3>Seus dados nas mensagens</h3><div class="fgrid">
