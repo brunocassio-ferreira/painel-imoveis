@@ -49,7 +49,7 @@ details.mais summary{cursor:pointer;font-weight:600;color:var(--acc)}
 .b1{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .tag{font-size:11px;padding:2px 7px;border-radius:10px;background:var(--chip);color:var(--tx);font-weight:600}
 .tag.hoje{background:#d62828;color:#fff}.tag.novo{background:#f4a261;color:#222}.tag.prop{background:var(--ok);color:#fff}
-.tag.multi{background:var(--blue);color:#fff}.tag.mad{background:#0e7490;color:#fff}.tag.queda{background:#6a3fa0;color:#fff}.tag.est{background:var(--chip);color:var(--mut);font-weight:400}
+.tag.multi{background:var(--blue);color:#fff}.tag.mad{background:#0e7490;color:#fff}.tag.queda{background:#6a3fa0;color:#fff}.tag.rad{background:#e0e7ef;color:#334;font-weight:600}.tag.est{background:var(--chip);color:var(--mut);font-weight:400}
 .score{margin-left:auto;font-weight:700;font-size:13px;border-radius:12px;padding:2px 8px;color:#fff;cursor:help}
 .preco{font-size:19px;font-weight:700}.preco s{font-size:13px;color:var(--mut);font-weight:400;margin-left:6px}
 .det,.datas{color:var(--mut);font-size:13px}.loc{font-size:14px}
@@ -119,6 +119,7 @@ dialog label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var
       <summary>Filtrar <span id="resumoF" class="mut"></span></summary>
       <p class="mut" style="margin:6px 0 0">Em cada linha dá para marcar vários; sem marcar vale como todos.</p>
       <div class="chips" id="fPeriodo"></div>
+      <div class="chips" id="fOrigem"></div>
       <div class="chips" id="fBairros"></div>
       <div class="chips" id="fPreco"></div>
       <div class="chips" id="fQts"></div>
@@ -246,7 +247,7 @@ let ADS=[], MED={}, F=normF(LS.get('painel_filtros',null)), OPC={fonte:[],tipo:[
 const HOJE=new Date(), HOJE_ISO=isoLocal(HOJE);
 
 function novoCrm(){return {leads:{},extras:{},config:{},modelos:null}}
-function filtrosPadrao(){return {periodo:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:['ativos'],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',multi:false,queda:false,follow:false,semBase:false,maduro:false}}
+function filtrosPadrao(){return {periodo:'',origem:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:['ativos'],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',multi:false,queda:false,follow:false,semBase:false,maduro:false}}
 // filtros salvos antes da escolha multipla guardavam texto simples em site, tipo, status e quartos
 function normF(f){f={...filtrosPadrao(),...(f||{})};for(const k of ['bairros','fonte','tipo','status','qts'])if(!Array.isArray(f[k]))f[k]=f[k]?[f[k]]:[];return f}
 function isoLocal(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`}
@@ -309,7 +310,7 @@ function leadMut(id){return CRM.leads[id]||(CRM.leads[id]={status:'novo',hist:[]
 function preparar(){
   const extras=Object.values(CRM.extras||{}).filter(x=>!x.removido);
   ADS=[...DATA.anuncios,...extras].map(a=>{const m2=num(a.area_m2);return {...a,outros:a.outros||[],m2,pm2:m2?a.preco/m2:0,rec:a.publicado||a.visto,
-    idade:dias(a.publicado||a.visto),estoque:a.base_inicial&&!a.publicado}});
+    idade:dias(a.publicado||a.visto),estoque:a.base_inicial&&!a.publicado,conf:!!a.publicado,radar:!a.publicado&&!a.base_inicial}});
   // maduro: proprietario com data real de publicacao, no ar ha 45 dias ou mais e visto nas ultimas 2 semanas
   for(const a of ADS)a.maduro=a.proprietario&&!!a.publicado&&a.idade>=MADURO&&dias(a.ultima||a.visto)<=14;
   MED={};for(const [b] of BAIRROS)MED[b]=mediana(ADS.filter(a=>a.bairro===b&&a.pm2).map(a=>a.pm2));
@@ -324,7 +325,7 @@ function pontuar(a){let s=0;const r=[];
   if(a.outros.length){s+=20;r.push(`em ${a.outros.length+1} sites, sinal de que não há exclusividade (+20)`)}
   if(a.preco_inicial&&a.preco<a.preco_inicial){s+=15;r.push('baixou o preço (+15)')}
   if(a.maduro){s+=15;r.push(`proprietário há ${a.idade} dias no ar, fase em que quem vende sozinho costuma aceitar ajuda (+15)`)}
-  if(!a.estoque){if(a.idade<=3){s+=20;r.push('anúncio de até 3 dias (+20)')}else if(a.idade<=7){s+=12;r.push('anúncio desta semana (+12)')}else if(a.idade<=30){s+=5;r.push('anúncio do mês (+5)')}}
+  if(a.conf){if(a.idade<=3){s+=20;r.push('anúncio de até 3 dias (+20)')}else if(a.idade<=7){s+=12;r.push('anúncio desta semana (+12)')}else if(a.idade<=30){s+=5;r.push('anúncio do mês (+5)')}}
   if(a.pm2&&MED[a.bairro]&&a.pm2>MED[a.bairro]*1.15){s+=10;r.push('R$/m² 15% acima da mediana do bairro, abre conversa sobre avaliação (+10)')}
   if(a.preco>=1.5e6){s+=5;r.push('ticket a partir de R$ 1,5 mi (+5)')}
   return [Math.min(100,s),r]}
@@ -332,17 +333,19 @@ const corScore=s=>s>=50?'#b23a3a':s>=30?'#d97706':s>=15?'#b08d1a':'#8a8a8a';
 
 /* ---------- filtros e lista ---------- */
 const CHECKS={fMulti:'multi',fQueda:'queda',fFollow:'follow',fSemBase:'semBase',fMaduro:'maduro'};
+const ORIGENS=[['','Todas'],['conf','Publicação confirmada'],['radar','Detectado pelo radar, sem data']];
 const CAMPOS={fTexto:'texto',fAnunc:'anunc',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fOrdem:'ordem'};
 function grupo(id,rot,k,ops){$('#'+id).innerHTML=`<b class="lbl">${rot}</b>`+ops.map(([v,t])=>
   `<span class="chip${F[k].includes(v)?' on':''}" data-g="${k}" data-v="${esc(v)}">${esc(t)}</span>`).join('')}
 const FAIXAS=[['','','Qualquer'],['500','800','500 a 800 mil'],['800','1500','800 mil a 1,5 mi'],['1500','3000','1,5 a 3 mi'],['3000','','Acima de 3 mi']];
 // atalhos de um toque: os recortes mais usados na rotina de agenciamento
-const ATALHOS=[['hoje','Novos hoje',f=>f.periodo==='0'],['prop','Proprietário direto',f=>f.anunc==='prop'],['maduro','Dono há 45+ dias no ar',f=>f.maduro],
+const ATALHOS=[['hoje','Publicados hoje (data confirmada)',f=>f.periodo==='0'&&f.origem==='conf'],['radar','Detectados hoje (sem data)',f=>f.periodo==='0'&&f.origem==='radar'],['prop','Proprietário direto',f=>f.anunc==='prop'],['maduro','Dono há 45+ dias no ar',f=>f.maduro],
   ['queda','Baixou o preço',f=>f.queda],['multi','Em 2+ sites',f=>f.multi],['follow','Follow-up vencido',f=>f.follow]];
-function atalho(id){const A={hoje:()=>F.periodo=F.periodo==='0'?'':'0',prop:()=>F.anunc=F.anunc==='prop'?'':'prop',maduro:()=>F.maduro=!F.maduro,
+function atalho(id){const A={hoje:()=>{const on=F.periodo==='0'&&F.origem==='conf';F.periodo=on?'':'0';F.origem=on?'':'conf'},radar:()=>{const on=F.periodo==='0'&&F.origem==='radar';F.periodo=on?'':'0';F.origem=on?'':'radar'},prop:()=>F.anunc=F.anunc==='prop'?'':'prop',maduro:()=>F.maduro=!F.maduro,
   queda:()=>F.queda=!F.queda,multi:()=>F.multi=!F.multi,follow:()=>F.follow=!F.follow};A[id]();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()}
 function montarFiltros(){
   $('#fPeriodo').innerHTML='<b class="lbl">Período</b>'+PERIODOS.map(([v,t])=>`<span class="chip${F.periodo===v?' on':''}" data-p="${v}">${t}</span>`).join('');
+  $('#fOrigem').innerHTML='<b class="lbl">Data</b>'+ORIGENS.map(([v,t])=>`<span class="chip${F.origem===v?' on':''}" data-o="${v}">${t}</span>`).join('');
   grupo('fBairros','Bairro','bairros',BAIRROS.map(([b])=>[b,b]));
   grupo('fStatus','Status','status',[['ativos','Ativos'],...STATUS.map(([k,n])=>[k,n])]);
   grupo('fFonte','Site','fonte',OPC.fonte.map(f=>[f,f]));
@@ -366,6 +369,8 @@ function filtrar(){
   const t=F.texto.trim().toLowerCase();
   let r=ADS.filter(a=>{const L=lead(a.id);
     if(F.periodo!==''&&(a.estoque||a.idade>+F.periodo))return false;
+    if(F.origem==='conf'&&!a.conf)return false;
+    if(F.origem==='radar'&&!a.radar)return false;
     if(F.semBase&&a.estoque)return false;
     if(F.maduro&&!a.maduro)return false;
     if(F.bairros.length&&!F.bairros.includes(a.bairro))return false;
@@ -395,8 +400,10 @@ function renderLista(){
   $('#btnMais').hidden=r.length<=limite}
 function card(a){const L=lead(a.id);const tags=[];
   if(a.estoque)tags.push('<span class="tag est">estoque inicial</span>');
-  else if(a.idade<=0)tags.push('<span class="tag hoje">HOJE</span>');
-  else if(a.idade<=3)tags.push('<span class="tag novo">NOVO</span>');
+  else if(a.conf&&a.idade<=0)tags.push('<span class="tag hoje">PUBLICADO HOJE</span>');
+  else if(a.conf&&a.idade<=3)tags.push('<span class="tag novo">NOVO</span>');
+  else if(a.radar&&a.idade<=0)tags.push('<span class="tag rad">detectado hoje · sem data</span>');
+  else if(a.radar&&a.idade<=3)tags.push('<span class="tag rad">detectado · sem data</span>');
   if(a.proprietario)tags.push('<span class="tag prop">proprietário</span>');
   if(a.outros.length)tags.push(`<span class="tag multi">${a.outros.length+1} sites</span>`);
   if(a.preco<a.preco_inicial)tags.push('<span class="tag queda">baixou</span>');
@@ -404,7 +411,7 @@ function card(a){const L=lead(a.id);const tags=[];
   if(a.manual)tags.push('<span class="tag">manual</span>');
   if(L.followup&&L.followup<=HOJE_ISO&&!['descartado','agenciado'].includes(L.status))tags.push('<span class="tag hoje">follow-up</span>');
   const det=[a.area_m2&&a.area_m2+' m²',a.quartos&&a.quartos+' qts',a.pm2&&money(a.pm2)+'/m²',a.tipo].filter(Boolean).join(' · ');
-  const datas=(a.publicado?`publicado ${br(a.publicado)} · `:'')+`visto ${br(a.visto)}`+(a.ultima&&a.ultima!==a.visto?` · ainda no ar em ${br(a.ultima)}`:'')+(a.outrosNomes.length?` · também em ${esc(a.outrosNomes.join(', '))}`:'');
+  const datas=(a.publicado?`publicado ${br(a.publicado)} (confirmado) · visto ${br(a.visto)}`:a.estoque?`data não informada pelo site · já estava no ar quando entrou no radar (${br(a.visto)})`:`data de publicação não informada pelo site · detectado pelo radar em ${br(a.visto)}, pode ser mais antigo`)+(a.ultima&&a.ultima!==a.visto?` · ainda no ar em ${br(a.ultima)}`:'')+(a.outrosNomes.length?` · também em ${esc(a.outrosNomes.join(', '))}`:'');
   const aberto=abertos.has(a.id);
   return `<article class="card${a.proprietario?' own':''}${L.status==='descartado'?' desc':''}" data-id="${esc(a.id)}">
   <div class="b1">${tags.join('')}<span class="score" style="background:${corScore(a.score)}" title="${esc(a.motivos.join('\n')||'sem sinais fortes')}">${a.score}</span></div>
@@ -667,6 +674,7 @@ document.addEventListener('click',e=>{const t=e.target;
   if(t.dataset.ir){irPara(t.dataset.ir);return}
   if(t.dataset.irb){mapa&&mapa.closePopup();irBairro(t.dataset.irb);return}
   if(t.dataset.p!==undefined&&t.closest('#fPeriodo')){F.periodo=t.dataset.p;LS.set('painel_filtros',F);montarFiltros();renderLista();return}
+  if(t.dataset.o!==undefined){F.origem=t.dataset.o;LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista();return}
   if(t.dataset.at){atalho(t.dataset.at);return}
   if(t.dataset.band!==undefined){[F.pmin,F.pmax]=t.dataset.band.split('|');LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista();return}
   if(t.dataset.g&&t.closest('#boxFiltros')){alternar(t.dataset.g,t.dataset.v);return}
