@@ -88,6 +88,8 @@ dialog label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var
 .modelo textarea{min-height:120px}
 .resp{border-bottom:1px solid var(--ln);padding:8px 0}
 .resp b{display:block;margin-bottom:3px}
+ol.fluxo{padding-left:22px;margin:6px 0}
+ol.fluxo li{margin-bottom:7px;line-height:1.45}
 @media (max-width:600px){.crm{grid-template-columns:1fr}#lista{grid-template-columns:1fr}.hb .l{width:100px}}
 </style>
 </head>
@@ -620,6 +622,29 @@ const ETAPAS=[
 const QUEM_PAGA=[
  ['Comprador',`Entrada; ITBI (Porto Alegre: 3%; no SFH, 0,5% sobre a parte financiada e 3% sobre o restante); registro na matrícula e, se for à vista, escritura (tabelas dos cartórios do RS, na faixa de 1% a 1,5% do valor somando tudo); tarifa de avaliação do banco (em torno de R$ 3 mil a R$ 3,5 mil); seguros MIP e DFI e tarifa mensal junto com as parcelas.`],
  ['Vendedor',`Comissão de corretagem (costume de mercado, negociável e definida na autorização de venda); certidões pessoais; quitação de IPTU e condomínio até a entrega; imposto de renda sobre ganho de capital, de 15% a 22,5% sobre o lucro, com isenções (único imóvel vendido por até R$ 440 mil sem outra venda em 5 anos, ou reaplicação do valor em outro imóvel residencial em até 180 dias).`]];
+// quem faz o que; itens marcados "confirmar na Suder" dependem do processo interno da casa
+const QUEM_FAZ=[
+ ['Você (corretor da Suder)',`Capta o imóvel e pega a autorização de venda assinada; junta os documentos iniciais do imóvel e do proprietário; anuncia e faz as visitas com ficha assinada; recebe as propostas por escrito e leva ao vendedor; acompanha as partes até a entrega das chaves. Pelo Código Civil (art. 723), o corretor tem de informar o cliente sobre os riscos do negócio que conheça, então leia as certidões antes do sinal, mesmo que a análise formal fique com o jurídico. Você não emite guia, não assina pelo cliente e não dá parecer jurídico.`],
+ ['Imobiliária (Suder / Auxiliadora Predial)',`Modelos de autorização de venda, proposta e contrato de promessa; revisão jurídica; setor de crédito ou correspondente bancário parceiro; recebe a comissão e repassa a sua parte. Confirmar na Suder: quem monta o processo de financiamento, qual correspondente Caixa Aqui ela usa, se há despachante parceiro e quem revisa o contrato.`],
+ ['Comprador',`Reúne documentos pessoais e de renda; escolhe o banco e pede a aprovação de crédito; consulta o saldo no app FGTS e assina a autorização de uso; paga a avaliação do banco, o ITBI e as custas de cartório; assina o contrato do banco.`],
+ ['Vendedor',`Entrega matrícula atualizada, IPTU, quitação de condomínio e certidões pessoais (dele e do cônjuge); abre o imóvel para o engenheiro do banco; assina o contrato do banco junto com o comprador; informa a conta para receber; entrega as chaves no prazo combinado.`],
+ ['Banco (Caixa ou outro)',`Analisa o crédito; manda engenheiro credenciado avaliar o imóvel; faz a análise jurídica do imóvel e dos vendedores; emite o contrato de financiamento, que vale como escritura; libera o dinheiro ao vendedor depois do registro. Com FGTS, é o banco que pede o débito na conta do fundo (a Caixa é a operadora do FGTS); o comprador não saca o dinheiro, ele vai direto para o vendedor.`],
+ ['Correspondente Caixa Aqui',`Empresa credenciada pela Caixa que monta e acompanha o processo no lugar da agência: confere documentos, cadastra a proposta, agenda vistoria e assinatura. Quem remunera o correspondente é a Caixa; se ele cobrar "assessoria" do comprador, isso tem de estar claro antes.`],
+ ['Prefeitura de Porto Alegre',`Emite a guia do ITBI (Secretaria Municipal da Fazenda), pedida pelo comprador ou por quem cuida do processo. O pagamento é exigido antes da escritura ou do registro.`],
+ ['Tabelionato de notas',`Só entra na compra sem banco (à vista, consórcio em alguns casos, parcelamento direto): lavra a escritura pública. No financiamento bancário não precisa, porque o contrato do banco já tem força de escritura.`],
+ ['Registro de Imóveis',`Registra a compra e a alienação fiduciária ao banco na matrícula. Só com o registro o comprador vira dono e o banco libera o dinheiro. Boa parte dos bancos envia o contrato por meio eletrônico; quando não, o comprador ou o despachante leva.`],
+ ['Despachante ou advogado (opcional)',`Pode cuidar de certidões, guia de ITBI e registro mediante pagamento. Quem contrata paga.`]];
+const FLUXO_CAIXA=[
+ ['Simulação e escolha do banco','Comprador, com seu apoio (simulador acima e simulador oficial).'],
+ ['Aprovação de crédito','Comprador entrega documentos de renda ao banco ou ao correspondente; o banco aprova.'],
+ ['Saldo e regras do FGTS','Comprador consulta o extrato no app FGTS; o correspondente confere se ele se enquadra (3 anos de FGTS, sem outro imóvel na cidade, sem financiamento SFH ativo, imóvel até o teto do SFH).'],
+ ['Documentos do imóvel e do vendedor','Vendedor entrega; você junta e repassa ao banco ou correspondente.'],
+ ['Avaliação do imóvel','Banco agenda o engenheiro; vendedor abre o imóvel; comprador paga a tarifa.'],
+ ['Análise jurídica e pedido do FGTS','Banco analisa os documentos; comprador assina o formulário de uso do FGTS.'],
+ ['Assinatura do contrato','Comprador, vendedor (e cônjuges) e banco, na agência ou com o correspondente.'],
+ ['ITBI','Comprador emite e paga a guia na Prefeitura (alguns bancos pedem o comprovante já na assinatura).'],
+ ['Registro','Registro de Imóveis; o banco envia eletronicamente ou o comprador leva o contrato.'],
+ ['Liberação do dinheiro','Banco paga o vendedor (financiamento + FGTS) depois do registro. Se a comissão estiver atrelada ao recebimento, sai aqui.']];
 function renderGuia(){
   const s={...SIM_PADRAO,...LS.get('painel_sim',{})};
   const campo=(k,t,extra='')=>`<label>${t}<input type="number" step="any" data-sim="${k}" value="${s[k]}" ${extra}></label>`;
@@ -631,6 +656,10 @@ function renderGuia(){
    <div class="bar"><button class="btn" id="simCopiar">Copiar resumo para o cliente</button><button class="btn" id="simPadrao">Voltar aos valores padrão</button></div>
    <p class="mut">Estimativa para conversa inicial, não é proposta de banco. Seguros e tarifa estimados em 0,04% do saldo + R$ ${REF.tarifa}/mês; a TR (hoje perto de zero) fica de fora. Referências públicas de 08/10/2026: Caixa a partir de ${String(REF.taxa).replace('.',',')}% a.a. + TR no SFH, até ${REF.cota}% do valor no imóvel usado (SAC), parcela até ${REF.comprom}% da renda, prazo até 35 anos com idade + prazo até 80 anos e 6 meses, teto do SFH de R$ 2,25 mi (Resolução CMN 5.255/2025). Cada banco tem taxa e cota próprias: confira no simulador oficial antes de prometer número ao cliente.</p></div>
   <div class="panel"><h3>Etapas da venda</h3>${ETAPAS.map(([t,x])=>`<details class="box"><summary><b>${esc(t)}</b></summary><p>${esc(x)}</p></details>`).join('')}</div>
+  <div class="panel"><h3>Quem faz o quê</h3>${QUEM_FAZ.map(([t,x])=>`<details class="box"><summary><b>${esc(t)}</b></summary><p>${esc(x)}</p></details>`).join('')}
+   <h3 style="margin-top:14px">Financiamento Caixa com FGTS: quem faz cada passo</h3>
+   <ol class="fluxo">${FLUXO_CAIXA.map(([t,x])=>`<li><b>${esc(t)}.</b> ${esc(x)}</li>`).join('')}</ol>
+   <p class="mut">Os papéis da imobiliária e do correspondente variam de casa para casa; confirme o processo interno com a Suder.</p></div>
   <div class="panel"><h3>Quem paga o quê</h3>${QUEM_PAGA.map(([t,x])=>`<div class="resp"><b>${esc(t)}</b><br><span>${esc(x)}</span></div>`).join('')}
    <p class="mut">Simuladores oficiais: <a class="lk" href="https://www.caixa.gov.br/voce/habitacao/simulador-de-habitacao" target="_blank" rel="noopener">Caixa</a> · <a class="lk" href="https://www.bb.com.br/site/pra-voce/financiamentos/financiamento-imobiliario/" target="_blank" rel="noopener">Banco do Brasil</a> · <a class="lk" href="https://www.itau.com.br/emprestimos-financiamentos/credito-imobiliario" target="_blank" rel="noopener">Itaú</a> · <a class="lk" href="https://www.santander.com.br/creditos-e-financiamentos/financiamento-imobiliario" target="_blank" rel="noopener">Santander</a> · <a class="lk" href="https://www.bradesco.com.br/html/classic/produtos-servicos/emprestimo-e-financiamento/imoveis/index.shtm" target="_blank" rel="noopener">Bradesco</a> · <a class="lk" href="https://www.sicredi.com.br/site/credito/financiamento-imobiliario/" target="_blank" rel="noopener">Sicredi</a>. ITBI de Porto Alegre: guia emitida no site da Secretaria da Fazenda. Valores de cartório e prazos são médias; confira caso a caso.</p></div>`;
   const atualizar=()=>{const v={};$$('#tab-guia [data-sim]').forEach(e=>v[e.dataset.sim]=e.dataset.sim==='sistema'?e.value:(+e.value||0));
