@@ -56,7 +56,7 @@ details.mais summary{cursor:pointer;font-weight:600;color:var(--acc)}
 .tag.multi{background:var(--blue);color:#fff}.tag.mad{background:#0F6E7A;color:#fff}.tag.queda{background:#9B2C7C;color:#fff}.tag.rad{background:#E3DCFA;color:#2B2148;font-weight:600}.tag.est{background:var(--chip);color:var(--mut);font-weight:400}
 .score{margin-left:auto;font-weight:700;font-size:13px;border-radius:12px;padding:2px 8px;color:#fff;cursor:help}
 .preco{font-size:19px;font-weight:700}.preco s{font-size:13px;color:var(--mut);font-weight:400;margin-left:6px}
-.det,.datas{color:var(--mut);font-size:13px}.loc{font-size:14px}
+.det,.datas{color:var(--mut);font-size:13px}.igual{font-size:13px;color:var(--mut);margin:2px 0}.igual a{display:inline-block;margin:2px 6px 2px 0;word-break:break-word}.loc{font-size:14px}
 .acoes{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center}
 .acoes select{flex:1;min-width:120px}
 .crm{border-top:1px dashed var(--ln);margin-top:6px;padding-top:6px;display:grid;grid-template-columns:1fr 1fr;gap:6px}
@@ -321,7 +321,8 @@ function preparar(){
   for(const a of ADS)a.maduro=a.proprietario&&!!a.publicado&&a.idade>=MADURO&&dias(a.ultima||a.visto)<=14;
   MED={};for(const [b] of BAIRROS)MED[b]=mediana(ADS.filter(a=>a.bairro===b&&a.pm2).map(a=>a.pm2));
   const nomes=Object.fromEntries(ADS.map(a=>[a.id,a.fonte]));
-  for(const a of ADS){a.outrosNomes=[...new Set(a.outros.map(i=>nomes[i]).filter(Boolean))];[a.score,a.motivos]=pontuar(a)}
+  const porId=Object.fromEntries(ADS.map(a=>[a.id,a]));
+  for(const a of ADS){a.outrosNomes=[...new Set(a.outros.map(i=>nomes[i]).filter(Boolean))];a.outrosAds=a.outros.map(i=>porId[i]).filter(Boolean);[a.score,a.motivos]=pontuar(a)}
   $('#info').textContent=`${DATA.anuncios.length} anúncios · dados de ${DATA.gerado_em?DATA.gerado_em.replace('T',' ').slice(0,16).split(' ').map((p,i)=>i?p:br(p)).join(' '):'?'} · ${modo==='github'?'GitHub privado':'só neste aparelho'}`;
   OPC.fonte=[...new Set(ADS.map(a=>a.fonte))].sort();
   OPC.tipo=[...new Set(ADS.map(a=>a.tipo||'não informado'))].sort();
@@ -425,6 +426,7 @@ function card(a){const L=lead(a.id);const tags=[];
   <div class="det">${esc(det)}</div>
   <div class="loc"><b>${esc(a.bairro)}</b>${a.rua?' · '+esc(a.rua):''} · ${esc(a.fonte)}</div>
   <div class="datas">${datas}</div>
+  ${a.outrosAds.length?`<div class="igual">Possível mesmo imóvel em: ${a.outrosAds.map(o=>`<a class="lk" href="${esc(safeUrl(o.link))}" target="_blank" rel="noopener">${esc(o.fonte)} · ${money(o.preco)}${o.area_m2?' · '+esc(o.area_m2)+' m²':''}${o.rua?' · '+esc(o.rua):''} ↗</a>`).join(' ')}</div>`:''}
   <div class="acoes"><a class="btn" href="${esc(safeUrl(a.link))}" target="_blank" rel="noopener">Anúncio</a>
    <button class="btn wpp" data-act="wpp">WhatsApp</button>
    <select data-act="status" style="border-color:${STM[L.status].cor}">${STATUS.map(([k,n])=>`<option value="${k}"${L.status===k?' selected':''}>${n}</option>`).join('')}</select>
@@ -572,7 +574,7 @@ function gerarPdf(){
     return `<div class="c${a.proprietario?' own':''}"><div class="p">${mi(a.preco)} <span class="s">nota ${a.score}${st&&st!=='novo'?' · '+esc(STM[st]?.nome||st):''}</span></div>
     <div class="m">${esc([a.tipo,a.area_m2&&a.area_m2+' m²',a.quartos&&a.quartos+' qts',a.rua,a.fonte].filter(Boolean).join(' · '))}</div>
     <div class="m">${a.estoque?'estoque inicial':(a.publicado?'publicado ':'visto ')+br(a.rec)}${a.outrosNomes.length?' · também em '+esc(a.outrosNomes.join(', ')):''}</div>
-    ${a.link?`<a href="${esc(a.link)}">${esc(a.link.replace(/^https?:\/\/(www\.)?/,'').slice(0,70))}</a>`:''}</div>`}).join('')).join('');
+    ${a.link?`<a href="${esc(a.link)}">${esc(a.link.replace(/^https?:\/\/(www\.)?/,'').slice(0,70))}</a>`:''}${a.outrosAds.map(o=>`<div class="m">Possível mesmo imóvel em ${esc(o.fonte)} (${mi(o.preco)}): <a href="${esc(o.link)}">${esc(o.link.replace(/^https?:\/\/(www\.)?/,'').slice(0,70))}</a></div>`).join('')}</div>`}).join('')).join('');
   w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anúncios ${HOJE_ISO}</title>
 <style>@page{size:A4;margin:10mm}body{font:13px/1.35 Arial,sans-serif;color:#222;background:#fff;margin:12px}h1{font-size:18px;margin:0 0 4px}
 h2{font-size:15px;background:#E3DCFA;padding:4px 8px;margin:12px 0 6px;break-after:avoid}.c{border:1px solid #ccc;border-radius:6px;padding:6px 8px;margin:0 0 6px;break-inside:avoid}
