@@ -426,12 +426,12 @@ function card(a){const L=lead(a.id);const tags=[];
   <div class="det">${esc(det)}</div>
   <div class="loc"><b>${esc(a.bairro)}</b>${a.rua?' · '+esc(a.rua):''} · ${esc(a.fonte)}</div>
   <div class="datas">${datas}</div>
-  ${a.outrosAds.length?`<div class="igual">Possível mesmo imóvel em: ${a.outrosAds.map(o=>`<a class="lk" href="${esc(safeUrl(o.link))}" target="_blank" rel="noopener">${esc(o.fonte)} · ${money(o.preco)}${o.area_m2?' · '+esc(o.area_m2)+' m²':''}${o.rua?' · '+esc(o.rua):''} ↗</a>`).join(' ')}</div>`:''}
-  <div class="acoes"><a class="btn" href="${esc(safeUrl(a.link))}" target="_blank" rel="noopener">Anúncio</a>
+<div class="acoes">${a.outrosAds.length?`<button class="btn" data-act="anuncios" title="Abrir o anúncio e ver os outros portais">Anúncio ▾</button>`:`<a class="btn" href="${esc(safeUrl(a.link))}" target="_blank" rel="noopener">Anúncio</a>`}
    <button class="btn wpp" data-act="wpp">WhatsApp</button>
    <select data-act="status" style="border-color:${STM[L.status].cor}">${STATUS.map(([k,n])=>`<option value="${k}"${L.status===k?' selected':''}>${n}</option>`).join('')}</select>
    <button class="btn" data-act="crm">${aberto?'▴':'CRM ▾'}</button>
    <button class="btn" data-act="sim" title="Simular financiamento deste imóvel">Simular</button></div>
+  ${a.outrosAds.length?`<div class="igual" hidden><a class="lk" href="${esc(safeUrl(a.link))}" target="_blank" rel="noopener">Abrir este anúncio ↗</a><br>Possível mesmo imóvel em: ${a.outrosAds.map(o=>`<a class="lk" href="${esc(safeUrl(o.link))}" target="_blank" rel="noopener">${esc(o.fonte)} · ${money(o.preco)}${o.area_m2?' · '+esc(o.area_m2)+' m²':''}${o.rua?' · '+esc(o.rua):''} ↗</a>`).join(' ')}</div>`:''}
   <div class="crm"${aberto?'':' hidden'}>
    <label>Contato é<select data-f="contato"><option value="">?</option><option value="proprietario"${L.contato==='proprietario'?' selected':''}>Proprietário</option><option value="corretor"${L.contato==='corretor'?' selected':''}>Corretor/imobiliária</option></select></label>
    <label>Nome<input data-f="nome" value="${esc(L.nome)}"></label>
@@ -705,6 +705,7 @@ function abrirSetup(msg){$('#sOwner').value=cfg.owner||'';$('#sRepo').value=cfg.
 
 /* ---------- eventos ---------- */
 document.addEventListener('click',e=>{const t=e.target;
+  if(t.dataset.act==='anuncios'){const g=t.closest('.card')?.querySelector('.igual');if(g){g.hidden=!g.hidden;t.textContent=g.hidden?'Anúncio ▾':'Anúncio ▴'}return}
   if(t.dataset.tab){mostrar(t.dataset.tab);return}
   if(t.dataset.ir){irPara(t.dataset.ir);return}
   if(t.dataset.irb){mapa&&mapa.closePopup();irBairro(t.dataset.irb);return}
