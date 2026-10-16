@@ -413,6 +413,7 @@ function card(a){const L=lead(a.id);const tags=[];
   else if(a.radar&&a.idade<=3)tags.push('<span class="tag rad">detectado · sem data</span>');
   if(a.proprietario)tags.push('<span class="tag prop">proprietário</span>');
   if(a.outros.length)tags.push(`<span class="tag multi">${a.outros.length+1} sites</span>`);
+  if(a.possivel_rede){const pr=a.possivel_rede;tags.push(`<a class="tag multi" href="${esc(safeUrl(pr.link))}" target="_blank" rel="noopener" title="Mesma rua, área e quartos, preço diferente. Pode ser o mesmo imóvel com preço ajustado, confira antes de abordar.">possível na rede: ${esc(pr.fonte)} ${money(pr.preco)} ↗</a>`)}
   if(a.preco<a.preco_inicial)tags.push('<span class="tag queda">baixou</span>');
   if(a.maduro)tags.push(`<span class="tag mad">${a.idade} dias no ar</span>`);
   if(a.manual)tags.push('<span class="tag">manual</span>');
