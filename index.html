@@ -150,7 +150,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
       </details>
       <div class="bar"><button class="btn" id="btnLimpar">Limpar filtros</button></div>
     </details>
-    <div class="bar"><span id="contagem" class="grow mut"></span><button class="btn" id="btnLimpar2" hidden>Limpar</button><button class="btn" id="btnPdf" title="Abre a lista filtrada pronta para salvar em PDF ou imprimir">PDF da lista</button><button class="btn" id="btnManual">+ Imóvel manual</button></div>
+    <div class="bar"><span id="contagem" class="grow mut"></span><label class="ck"><input type="checkbox" id="fJanela2"> Só últimos 14 dias</label><button class="btn" id="btnLimpar2" hidden>Limpar</button><button class="btn" id="btnPdf" title="Abre a lista filtrada pronta para salvar em PDF ou imprimir">PDF da lista</button><button class="btn" id="btnManual">+ Imóvel manual</button></div>
     <div id="lista"></div>
     <div class="bar"><button class="btn" id="btnMais" hidden>Mostrar mais</button></div>
   </section>
@@ -365,6 +365,7 @@ function montarFiltros(){
   const m=CAMPOS;
   for(const [id,k] of Object.entries(m))$('#'+id).value=F[k]??'';
   for(const [id,k] of Object.entries(CHECKS))$('#'+id).checked=F[k];
+  $('#fJanela2').checked=F.janela;
 }
 function alternar(k,v){let s=F[k].includes(v)?F[k].filter(x=>x!==v):[...F[k],v];
   // "Ativos" e um atalho: marcar ele limpa os status avulsos, marcar um status avulso desmarca "Ativos"
@@ -732,6 +733,7 @@ document.addEventListener('change',e=>{const t=e.target,c=t.closest('.card');
     L.atualizado=Date.now();salvar();if(t.dataset.f==='motivo')rerenderCard(c.dataset.id);return}
   if(t.closest('#boxFiltros,#barraRapida'))lerFiltros()});
 $('#fTexto').addEventListener('input',()=>{clearTimeout(window._ft);window._ft=setTimeout(lerFiltros,300)});
+$('#fJanela2').onchange=e=>{F.janela=e.target.checked;LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};
 $('#btnLimpar').onclick=$('#btnLimpar2').onclick=()=>{F=filtrosPadrao();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};
 $('#btnMais').onclick=()=>{limite+=40;renderLista()};
 $('#btnReload').onclick=carregar;$('#btnCfg').onclick=()=>abrirSetup('');
