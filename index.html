@@ -143,6 +143,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
           <label class="ck"><input type="checkbox" id="fMulti"> Em 2 ou mais sites</label>
           <label class="ck"><input type="checkbox" id="fQueda"> Baixou o preço</label>
           <label class="ck"><input type="checkbox" id="fFollow"> Follow-up vencido</label>
+          <label class="ck"><input type="checkbox" id="fJanela"> Só últimos 14 dias (sem estoque antigo)</label>
           <label class="ck"><input type="checkbox" id="fSemBase"> Esconder estoque inicial</label>
           <label class="ck"><input type="checkbox" id="fMaduro"> Proprietário há 45+ dias no ar</label>
         </div>
@@ -224,6 +225,7 @@ const STM=Object.fromEntries(STATUS.map(s=>[s[0],{nome:s[1],cor:s[2]}]));
 const ACIONADOS=['acionado','sem_resposta','respondeu','avaliacao','negociando','agenciado'];
 const RESPOSTA=['respondeu','avaliacao','negociando','agenciado'];
 const AVALIOU=['avaliacao','negociando','agenciado'];
+const JANELA=14;  // dias: o painel mostra por padrao so o que entrou ou foi publicado nas ultimas 2 semanas
 const MADURO=45;   // dias no ar a partir dos quais o proprietario que vende sozinho costuma aceitar ajuda (6 a 12 semanas, NAR)
 const MOTIVOS=['Exclusividade vigente','Já está na Auxiliadora','Fora do perfil','Preço fora da realidade','Não quer corretor','Já vendido','Sem contato disponível','Duplicado','Outro'];
 const PERIODOS=[['','Todos'],['0','Hoje'],['3','3 dias'],['7','7 dias'],['30','30 dias']];
@@ -253,7 +255,7 @@ let ADS=[], MED={}, F=normF(LS.get('painel_filtros',null)), OPC={fonte:[],tipo:[
 const HOJE=new Date(), HOJE_ISO=isoLocal(HOJE);
 
 function novoCrm(){return {leads:{},extras:{},config:{},modelos:null}}
-function filtrosPadrao(){return {periodo:'',origem:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:['ativos'],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',multi:false,queda:false,follow:false,semBase:false,maduro:false}}
+function filtrosPadrao(){return {periodo:'',origem:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:['ativos'],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',multi:false,queda:false,follow:false,semBase:false,maduro:false,janela:true}}
 // filtros salvos antes da escolha multipla guardavam texto simples em site, tipo, status e quartos
 function normF(f){f={...filtrosPadrao(),...(f||{})};for(const k of ['bairros','fonte','tipo','status','qts'])if(!Array.isArray(f[k]))f[k]=f[k]?[f[k]]:[];return f}
 function isoLocal(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`}
@@ -339,7 +341,7 @@ function pontuar(a){let s=0;const r=[];
 const corScore=s=>s>=50?'#b23a3a':s>=30?'#d97706':s>=15?'#b08d1a':'#8a8a8a';
 
 /* ---------- filtros e lista ---------- */
-const CHECKS={fMulti:'multi',fQueda:'queda',fFollow:'follow',fSemBase:'semBase',fMaduro:'maduro'};
+const CHECKS={fMulti:'multi',fQueda:'queda',fFollow:'follow',fSemBase:'semBase',fMaduro:'maduro',fJanela:'janela'};
 const ORIGENS=[['','Todas'],['conf','Publicação confirmada'],['radar','Detectado pelo radar, sem data']];
 const CAMPOS={fTexto:'texto',fAnunc:'anunc',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fOrdem:'ordem'};
 function grupo(id,rot,k,ops){$('#'+id).innerHTML=`<b class="lbl">${rot}</b>`+ops.map(([v,t])=>
@@ -379,6 +381,7 @@ function filtrar(){
     if(F.origem==='conf'&&!a.conf)return false;
     if(F.origem==='radar'&&!a.radar)return false;
     if(F.semBase&&a.estoque)return false;
+    if(F.janela&&!F.maduro&&(a.estoque||a.idade>JANELA))return false;
     if(F.maduro&&!a.maduro)return false;
     if(F.bairros.length&&!F.bairros.includes(a.bairro))return false;
     if(F.anunc==='prop'&&!a.proprietario)return false;
