@@ -116,6 +116,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
       <div class="chips" id="fAtalhos" style="margin-top:0"></div>
       <div class="fgrid2">
         <input id="fTexto" placeholder="Buscar por rua, código ou site">
+        <select id="fLev" aria-label="Levantamento"><option value="">Todos os levantamentos</option></select>
         <select id="fOrdem" aria-label="Ordenar">
           <option value="rec">Mais recentes</option><option value="score">Maior oportunidade</option>
           <option value="pdesc">Maior preço</option><option value="pasc">Menor preço</option>
@@ -171,9 +172,11 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
       <div class="chips" id="pBairros"></div>
       <div class="chips" id="pFase"></div>
       <div class="chips" id="pMin"></div>
+      <div class="chips" id="pItbi"></div>
+      <div class="chips" id="pItbiMin"></div>
       <div class="chips" id="pStatus"></div>
       <div class="fgrid2"><input id="pTexto" placeholder="Buscar prédio, rua, síndico ou zelador"><select id="pOrdem" aria-label="Ordenar">
-        <option value="total">Mais unidades à venda</option><option value="fora">Mais fora da rede</option><option value="retorno">Próximo retorno</option><option value="nome">Nome</option></select></div>
+        <option value="total">Mais anúncios (unidades à venda)</option><option value="itbi">Mais vendas pelo ITBI</option><option value="giro">Vendem muito e têm pouco anúncio</option><option value="fora">Mais fora da rede</option><option value="retorno">Próximo retorno</option><option value="nome">Nome</option></select></div>
     </div>
     <div class="bar"><span id="pContagem" class="grow mut"></span><button class="btn" id="pRota" hidden>Abrir roteiro (0)</button><button class="btn" id="pLimparRota" hidden>Limpar roteiro</button><button class="btn" id="pManual">+ Prédio manual</button></div>
     <div id="pMapa" style="height:420px;border-radius:10px;border:1px solid var(--ln);margin-bottom:10px" hidden></div>
@@ -292,7 +295,7 @@ let ADS=[], MED={}, F=normF(LS.get('painel_filtros',null)), OPC={fonte:[],tipo:[
 const HOJE=new Date(), HOJE_ISO=isoLocal(HOJE);
 
 function novoCrm(){return {leads:{},extras:{},predios:{},predios_extra:{},config:{},modelos:null}}
-function filtrosPadrao(){return {periodo:'',origem:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:['ativos'],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',multi:false,queda:false,follow:false,semBase:false,maduro:false,janela:true}}
+function filtrosPadrao(){return {periodo:'',origem:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:['ativos'],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',lev:'',multi:false,queda:false,follow:false,semBase:false,maduro:false,janela:true}}
 // filtros salvos antes da escolha multipla guardavam texto simples em site, tipo, status e quartos
 function normF(f){f={...filtrosPadrao(),...(f||{})};for(const k of ['bairros','fonte','tipo','status','qts'])if(!Array.isArray(f[k]))f[k]=f[k]?[f[k]]:[];return f}
 function isoLocal(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`}
@@ -382,7 +385,7 @@ const corScore=s=>s>=50?'#b23a3a':s>=30?'#d97706':s>=15?'#b08d1a':'#8a8a8a';
 /* ---------- filtros e lista ---------- */
 const CHECKS={fMulti:'multi',fQueda:'queda',fFollow:'follow',fSemBase:'semBase',fMaduro:'maduro',fJanela:'janela'};
 const ORIGENS=[['','Todas'],['conf','Publicação confirmada'],['radar','Detectado pelo radar, sem data']];
-const CAMPOS={fTexto:'texto',fAnunc:'anunc',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fOrdem:'ordem'};
+const CAMPOS={fTexto:'texto',fAnunc:'anunc',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fOrdem:'ordem',fLev:'lev'};
 function grupo(id,rot,k,ops){$('#'+id).innerHTML=`<b class="lbl">${rot}</b>`+ops.map(([v,t])=>
   `<span class="chip${F[k].includes(v)?' on':''}" data-g="${k}" data-v="${esc(v)}">${esc(t)}</span>`).join('')}
 const FAIXAS=[['','','Qualquer'],['500','800','500 a 800 mil'],['800','1500','800 mil a 1,5 mi'],['1500','3000','1,5 a 3 mi'],['3000','','Acima de 3 mi']];
@@ -401,6 +404,9 @@ function montarFiltros(){
   grupo('fQts','Quartos','qts',[['1','1'],['2','2'],['3','3'],['4','4 ou mais']]);
   $('#fPreco').innerHTML='<b class="lbl">Preço</b>'+FAIXAS.map(([mn,mx,t])=>`<span class="chip${String(F.pmin)===mn&&String(F.pmax)===mx?' on':''}" data-band="${mn}|${mx}">${t}</span>`).join('');
   $('#fAtalhos').innerHTML=ATALHOS.map(([id,t,on])=>`<span class="chip${on(F)?' on':''}" data-at="${id}">${t}</span>`).join('');
+  const levs=[...new Set(ADS.map(a=>a.levantamento).filter(Boolean))].sort().reverse().slice(0,15);
+  if(F.lev&&!levs.includes(F.lev))levs.push(F.lev);
+  $('#fLev').innerHTML='<option value="">Todos os levantamentos</option>'+levs.map(l=>`<option value="${esc(l)}">${esc(levRot(l,(ADS.find(a=>a.levantamento===l)||{}).lev_tipo))}</option>`).join('');
   const m=CAMPOS;
   for(const [id,k] of Object.entries(m))$('#'+id).value=F[k]??'';
   for(const [id,k] of Object.entries(CHECKS))$('#'+id).checked=F[k];
@@ -414,6 +420,8 @@ function lerFiltros(){
   for(const [id,k] of Object.entries(CAMPOS))F[k]=$('#'+id).value;
   for(const [id,k] of Object.entries(CHECKS))F[k]=$('#'+id).checked;
   LS.set('painel_filtros',F);limite=40;renderLista()}
+const LEVT={leve:'leve',completa:'completa',monitor:'monitor',avulso:'avulso'};
+function levRot(l,tipo){if(!l)return '';const [d,h]=l.split(' ');return `${d===HOJE_ISO?'hoje':br(d)} ${h}${tipo?' · '+(LEVT[tipo]||tipo):''}`}
 function filtrar(){
   const t=F.texto.trim().toLowerCase();
   let r=ADS.filter(a=>{const L=lead(a.id);
@@ -437,9 +445,10 @@ function filtrar(){
     if(F.multi&&!a.outros.length)return false;
     if(F.queda&&!(a.preco<a.preco_inicial))return false;
     if(F.follow&&!(L.followup&&L.followup<=HOJE_ISO&&!['descartado','agenciado'].includes(L.status)))return false;
+    if(F.lev&&a.levantamento!==F.lev)return false;
     if(t&&!`${a.rua} ${a.codigo} ${a.fonte} ${a.bairro} ${L.nome||''} ${L.nota||''}`.toLowerCase().includes(t))return false;
     return true});
-  const ord={rec:(a,b)=>(b.estoque?0:1)-(a.estoque?0:1)||b.rec.localeCompare(a.rec)||b.score-a.score,score:(a,b)=>b.score-a.score||b.rec.localeCompare(a.rec),
+  const ord={rec:(a,b)=>(b.estoque?0:1)-(a.estoque?0:1)||b.rec.localeCompare(a.rec)||(b.levantamento||'').localeCompare(a.levantamento||'')||b.score-a.score,score:(a,b)=>b.score-a.score||b.rec.localeCompare(a.rec),
     pdesc:(a,b)=>b.preco-a.preco,pasc:(a,b)=>a.preco-b.preco,m2asc:(a,b)=>(a.pm2||1e9)-(b.pm2||1e9),m2desc:(a,b)=>b.pm2-a.pm2}[F.ordem]||(()=>0);
   return r.sort(ord)}
 function renderLista(){
@@ -449,6 +458,7 @@ function renderLista(){
   $('#lista').innerHTML=r.slice(0,limite).map(card).join('')||'<p class="mut">Nenhum anúncio com esses filtros.</p>';
   $('#btnMais').hidden=r.length<=limite}
 function card(a){const L=lead(a.id);const tags=[];
+  if(a.levantamento)tags.push(`<span class="tag est" title="Rodada de coleta em que o anúncio apareceu pela primeira vez">levantamento ${esc(levRot(a.levantamento,a.lev_tipo))}</span>`);
   if(a.estoque)tags.push('<span class="tag est">estoque inicial</span>');
   else if(a.conf&&a.idade<=0)tags.push('<span class="tag hoje">PUBLICADO HOJE</span>');
   else if(a.conf&&a.idade<=3)tags.push('<span class="tag novo">NOVO</span>');
@@ -540,7 +550,7 @@ const PST=[['nao','Não visitado','#8a8a8a'],['visitado','Visitado, sem contato'
  ['parceiro','Porta aberta (indica)','#1F7A4D'],['retornar','Retornar','#0F6E7A'],['sem_acesso','Sem acesso ou recusou','#b23a3a']];
 const PSTM=Object.fromEntries(PST.map(s=>[s[0],{nome:s[1],cor:s[2]}]));
 const FASES=[['pronto','Prontos'],['recente','Entregues há até 3 anos'],['obra','Em obra']];
-function predFiltroPadrao(){return {visao:'lista',bairros:[],fases:['pronto','recente'],min:'2',status:[],texto:'',ordem:'total'}}
+function predFiltroPadrao(){return {visao:'lista',bairros:[],fases:['pronto','recente'],min:'2',ij:'v365',im:'',status:[],texto:'',ordem:'total'}}
 function pficha(id){return (CRM.predios||{})[id]||{status:'nao'}}
 function pfichaMut(id){CRM.predios=CRM.predios||{};return CRM.predios[id]||(CRM.predios[id]={status:'nao',hist:[]})}
 function distM(a,b){const R=6371e3,r=Math.PI/180,dl=(b.lat-a.lat)*r,dg=(b.lng-a.lng)*r;
@@ -549,18 +559,22 @@ let PL=[];
 function prepararPredios(){
   const ext=Object.values(CRM.predios_extra||{}).filter(x=>!x.removido).map(x=>({...x,fase:'pronto',unidades:[],total:0,fora_rede:0,areas:[],itens:[],manual:true,rua_total:0}));
   PL=[...(PRED.predios||[]),...ext];
-  const geo=PL.filter(p=>p.lat&&p.fase!=='obra');
+  const geo=PL.filter(p=>p.lat&&p.fase!=='obra'&&p.total);
   for(const p of PL)p.perto=p.lat?geo.filter(o=>o!==p&&distM(p,o)<=300).sort((a,b)=>distM(p,a)-distM(p,b)):[];
 }
+const IJ=[['v30','30 dias'],['v90','90 dias'],['v180','6 meses'],['v365','12 meses']];
+const iv=p=>(p.itbi&&p.itbi[PF.ij||'v365'])||0;
 function filtrarPredios(){const t=PF.texto.trim().toLowerCase();
   const r=PL.filter(p=>{const f=pficha(p.id);
     if(!p.manual&&PF.fases.length&&!PF.fases.includes(p.fase))return false;
     if(PF.bairros.length&&!PF.bairros.includes(p.bairro))return false;
-    if(PF.min&&!p.manual&&p.total<+PF.min&&!(CRM.predios||{})[p.id])return false;
+    if(PF.min&&!PF.im&&!p.manual&&p.total<+PF.min&&!(CRM.predios||{})[p.id])return false;
+    if(PF.im&&iv(p)<+PF.im)return false;
     if(PF.status.length&&!PF.status.includes(f.status))return false;
     if(t&&!`${p.nome} ${p.rua} ${p.numero} ${p.bairro} ${f.sindico||''} ${f.zelador||''} ${f.adm||''} ${f.nota||''}`.toLowerCase().includes(t))return false;
     return true});
-  const o={total:(a,b)=>b.total-a.total||b.fora_rede-a.fora_rede,fora:(a,b)=>b.fora_rede-a.fora_rede||b.total-a.total,
+  const o={itbi:(a,b)=>iv(b)-iv(a)||b.total-a.total,giro:(a,b)=>iv(b)/(b.total+1)-iv(a)/(a.total+1)||iv(b)-iv(a),
+    total:(a,b)=>b.total-a.total||b.fora_rede-a.fora_rede,fora:(a,b)=>b.fora_rede-a.fora_rede||b.total-a.total,
     retorno:(a,b)=>(pficha(a.id).retorno||'9999').localeCompare(pficha(b.id).retorno||'9999')||b.total-a.total,nome:(a,b)=>a.nome.localeCompare(b.nome)}[PF.ordem];
   return r.sort(o)}
 function chipsP(id,rot,k,ops){$('#'+id).innerHTML=`<b class="lbl">${rot}</b>`+ops.map(([v,t])=>{const on=Array.isArray(PF[k])?PF[k].includes(v):PF[k]===v;
@@ -570,19 +584,26 @@ function montarFiltrosP(){
   chipsP('pBairros','Bairro','bairros',BAIRROS.map(([b])=>[b,b]));
   chipsP('pFase','Prédio','fases',FASES);
   chipsP('pMin','À venda','min',[['','Todos'],['2','2 ou mais'],['3','3 ou mais'],['5','5 ou mais']]);
+  chipsP('pItbi','Vendas ITBI em','ij',IJ);
+  chipsP('pItbiMin','Mínimo de vendas','im',[['','Todos'],['2','2 ou mais'],['3','3 ou mais'],['5','5 ou mais'],['10','10 ou mais']]);
   chipsP('pStatus','Visita','status',PST.map(([k,n])=>[k,n]));
   $('#pTexto').value=PF.texto;$('#pOrdem').value=PF.ordem;
-  for(const id of ['pFase','pMin','pStatus'])$('#'+id).hidden=PF.visao==='ruas';$('#pTexto').parentElement.hidden=PF.visao==='ruas'}
+  for(const id of ['pFase','pMin','pItbi','pItbiMin','pStatus'])$('#'+id).hidden=PF.visao==='ruas';$('#pTexto').parentElement.hidden=PF.visao==='ruas'}
 function alternarP(k,v){if(Array.isArray(PF[k]))PF[k]=PF[k].includes(v)?PF[k].filter(x=>x!==v):[...PF[k],v];else PF[k]=v;
   LS.set('painel_pfiltros',PF);plimite=30;montarFiltrosP();renderPredios()}
 const endereco=p=>`${p.rua}${p.numero?', '+p.numero:''}`;
 const mapsUrl=p=>p.lat?`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lng}`:`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(endereco(p)+', '+p.bairro+', Porto Alegre')}`;
 const pabertos=new Set(), punid=new Set();
+const MESES_S=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+function spark(serie){if(!serie||!serie.some(x=>x))return '';const mx=Math.max(...serie),h=n=>Math.max(n?3:1,Math.round(26*n/mx));
+  const d=new Date();let y=d.getFullYear(),m=d.getMonth();const rot=[];for(let i=0;i<serie.length;i++){rot.unshift(`${MESES_S[m]}/${String(y).slice(2)}`);m--;if(m<0){m=11;y--}}
+  return `<span style="display:inline-flex;align-items:flex-end;gap:2px;height:28px;margin-top:4px" title="vendas por mês, últimos 24 meses (data de pagamento do ITBI)">${serie.map((n,i)=>`<i title="${rot[i]}: ${n}" style="display:block;width:7px;height:${h(n)}px;background:${n?'var(--acc)':'var(--chip)'};border-radius:1px"></i>`).join('')}</span> <span class="mut" style="font-size:11px">24 meses</span>`}
 function cardPredio(p){const f=pficha(p.id),ab=pabertos.has(p.id);const tags=[];
   if(p.fase==='recente')tags.push(`<span class="tag novo">entregue ${p.entrega?br(p.entrega):'recentemente'}</span>`);
   if(p.fase==='obra')tags.push(`<span class="tag est">em obra${p.entrega?' · entrega '+br(p.entrega):''}</span>`);
   if(p.fora_rede)tags.push(`<span class="tag prop">${p.fora_rede} fora da rede</span>`);
   if(p.portaria)tags.push('<span class="tag">portaria</span>');
+  if(p.itbi&&p.itbi.v365>=3&&!p.total)tags.push('<span class="tag prop">vende e sem anúncio</span>');
   if(p.manual)tags.push('<span class="tag">manual</span>');
   if(f.retorno&&f.retorno<=HOJE_ISO)tags.push('<span class="tag hoje">retorno</span>');
   const tel=(n,t,quem)=>t?`<a class="btn wpp" href="https://wa.me/${('55'+t.replace(/\D/g,'')).replace(/^5555/,'55')}?text=${encodeURIComponent(`Olá${n?', '+n.trim().split(' ')[0]:''}! Tudo bem? Sou ${CRM.config?.meu_nome||'[seu nome]'}, da ${CRM.config?.agencia||'Suder Imóveis, da rede Auxiliadora Predial'}. Passei no ${p.nome} esses dias. Fico à disposição para o que precisar no prédio.`)}" target="_blank" rel="noopener">WhatsApp ${quem}</a>`:'';
@@ -592,6 +613,7 @@ function cardPredio(p){const f=pficha(p.id),ab=pabertos.has(p.id);const tags=[];
   <div class="preco">${esc(p.nome)}</div>
   <div class="loc"><b>${esc(p.bairro)}</b> · ${esc(endereco(p))}</div>
   ${p.total?`<div class="det"><b>${p.total} à venda</b> · ${mi(p.preco_min)}${p.preco_max>p.preco_min?' a '+mi(p.preco_max):''}${p.areas.length?' · '+esc(p.areas.slice(0,6).join(', '))+' m²':''}</div>`:''}
+  ${p.itbi?`<div class="det"><b>${p.itbi.v365} vendas em 12 meses</b> (ITBI pago) · ${p.itbi.v180} em 6m · ${p.itbi.v90} em 90d · ${p.itbi.v30} em 30d · ${p.itbi.v7} em 7d${p.itbi.m2_med?` · R$ ${p.itbi.m2_med.toLocaleString('pt-BR')}/m² pago`:''}${p.itbi.ano_constr?` · construção ${p.itbi.ano_constr}`:''}<br>${spark(p.itbi.serie)}</div>`:''}
   <div class="datas">${p.rua_total?`${p.rua_total} anúncios na mesma rua (todos os sites)`:''}${p.perto.length?`${p.rua_total?' · ':''}${p.perto.length} prédio${p.perto.length>1?'s':''} com anúncio a até 300 m`:''}</div>
   <div class="acoes"><a class="btn" href="${esc(mapsUrl(p))}" target="_blank" rel="noopener">Mapa ↗</a>
    ${p.total?`<button class="btn" data-pact="unid">Unidades ${punid.has(p.id)?'▴':'▾'}</button>`:''}
@@ -629,7 +651,7 @@ function renderPredios(){
     $('#pLista').innerHTML=`<div class="panel scroll"><table><tr><th>Rua</th><th>Bairro</th><th>Anúncios</th><th>Fora da rede</th><th>Em obra</th><th>Prédios mapeados</th><th>Sites</th></tr>
      ${r.map(x=>`<tr><td><a class="lk" data-prua="${esc(x.rua)}">${esc(x.rua)}</a></td><td>${esc(x.bairro)}</td><td><b>${x.total}</b></td><td>${x.fora_rede}</td><td>${x.obra||''}</td><td>${x.predios||''}</td><td class="mut">${esc(Object.entries(x.fontes).sort((a,b)=>b[1]-a[1]).map(([f,n])=>f+' '+n).join(', '))}</td></tr>`).join('')}</table>
      <p class="mut">Conta todos os anúncios com rua informada, de todos os sites, inclusive os da rede. Rua cheia de anúncio é rua com giro: vale percorrer a pé atrás de placas e portarias. Toque no nome para ver os anúncios dela.</p></div>`;return}
-  const r=filtrarPredios();$('#pContagem').textContent=`${r.length} prédios · ${r.reduce((s,p)=>s+p.total,0)} unidades à venda`+(PRED.gerado_em?` · dados de ${br(PRED.gerado_em.slice(0,10))}`:'');
+  const r=filtrarPredios();$('#pContagem').textContent=`${r.length} prédios · ${r.reduce((s,p)=>s+p.total,0)} unidades à venda · ${r.reduce((s,p)=>s+iv(p),0)} vendas pelo ITBI (${(IJ.find(x=>x[0]===(PF.ij||'v365'))||[])[1]})`+(PRED.gerado_em?` · anúncios de ${br(PRED.gerado_em.slice(0,10))}`:'')+(PRED.itbi&&PRED.itbi.pagamentos_ate?` · ITBI pago até ${br(PRED.itbi.pagamentos_ate)} (a prefeitura publica em blocos, última publicação ${br(PRED.itbi.publicado_pela_prefeitura)})`:'');
   if(v==='mapa'){$('#pLista').innerHTML='';$('#pMais').hidden=true;renderMapaPredios(r);return}
   $('#pLista').innerHTML=`<div class="grade">${r.slice(0,plimite).map(cardPredio).join('')}</div>`;
   if(!r.length)$('#pLista').innerHTML='<p class="mut">Nenhum prédio com esses filtros.</p>';
@@ -640,8 +662,8 @@ function renderMapaPredios(r){
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(pmapa);pcamadas=L.layerGroup().addTo(pmapa)}
   setTimeout(()=>pmapa.invalidateSize(),50);pcamadas.clearLayers();const pts=[];
   for(const p of r.filter(p=>p.lat)){const cor=PSTM[pficha(p.id).status]?.cor||'#8a8a8a';pts.push([p.lat,p.lng]);
-    L.circleMarker([p.lat,p.lng],{radius:5+Math.min(14,2*Math.sqrt(p.total)*1.6),color:ROTA.has(p.id)?'#d62828':cor,weight:ROTA.has(p.id)?3:1,fillColor:cor,fillOpacity:.7}).addTo(pcamadas)
-     .bindPopup(`<b>${esc(p.nome)}</b><br>${esc(endereco(p))} · ${esc(p.bairro)}<br>${p.total} à venda${p.fora_rede?` (${p.fora_rede} fora da rede)`:''}<br>${esc(PSTM[pficha(p.id).status]?.nome)}<br><a class="lk" data-pir="${esc(p.id)}">abrir ficha</a> · <a class="lk" data-protap="${esc(p.id)}">${ROTA.has(p.id)?'tirar do':'pôr no'} roteiro</a>`)}
+    L.circleMarker([p.lat,p.lng],{radius:5+Math.min(14,2*Math.sqrt(PF.ordem==='total'?p.total:Math.max(iv(p),1))*1.6),color:ROTA.has(p.id)?'#d62828':cor,weight:ROTA.has(p.id)?3:1,fillColor:cor,fillOpacity:.7}).addTo(pcamadas)
+     .bindPopup(`<b>${esc(p.nome)}</b><br>${esc(endereco(p))} · ${esc(p.bairro)}<br>${p.total} à venda${p.fora_rede?` (${p.fora_rede} fora da rede)`:''}${p.itbi?` · ${p.itbi.v365} vendas em 12m (ITBI)`:''}<br>${esc(PSTM[pficha(p.id).status]?.nome)}<br><a class="lk" data-pir="${esc(p.id)}">abrir ficha</a> · <a class="lk" data-protap="${esc(p.id)}">${ROTA.has(p.id)?'tirar do':'pôr no'} roteiro</a>`)}
   if(pts.length)pmapa.fitBounds(pts,{padding:[20,20],maxZoom:16})}
 function irPredio(id){PF={...predFiltroPadrao(),fases:[],min:'',visao:'lista'};const p=PL.find(x=>x.id===id);if(!p)return;
   pmapa&&pmapa.closePopup();PF.texto=p.nome;montarFiltrosP();pabertos.add(id);mostrar('predios')}
