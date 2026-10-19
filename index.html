@@ -103,6 +103,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
   <nav>
     <button data-tab="anuncios" class="on">Anúncios</button>
     <button data-tab="predios">Prédios</button>
+    <button data-tab="itbi">ITBI</button>
     <button data-tab="funil">Funil</button>
     <button data-tab="mapa">Mapa</button>
     <button data-tab="intel">Inteligência</button>
@@ -183,6 +184,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
     <div id="pLista"></div>
     <div class="bar"><button class="btn" id="pMais" hidden>Mostrar mais</button></div>
   </section>
+  <section id="tab-itbi" hidden></section>
   <section id="tab-funil" hidden></section>
   <section id="tab-mapa" hidden>
     <div class="bar"><label class="mut">Medir por <select id="mMetrica">
@@ -290,6 +292,7 @@ const RESPOSTAS=[
 ];
 
 let cfg=LS.get('painel_cfg',{}), modo='', DATA={anuncios:[],gerado_em:''}, CRM=novoCrm(), crmSha=null;
+let ITB=null, IFI=Object.assign({per:'365',tipos:['Apartamento','Cobertura','Flat','Casa','Casa em condomínio'],escopo:'alvo',ord:'n',lim:40},LS.get('painel_ifiltros',{}));
 let PRED={predios:[],ruas:[],gerado_em:''}, PF=Object.assign(predFiltroPadrao(),LS.get('painel_pfiltros',{})), plimite=30, pmapa=null, pcamadas=null, ROTA=new Set(LS.get('painel_rota',[]));
 let ADS=[], MED={}, F=normF(LS.get('painel_filtros',null)), OPC={fonte:[],tipo:[]}, limite=40, mapa=null, camadas=null, wppId=null;
 const HOJE=new Date(), HOJE_ISO=isoLocal(HOJE);
@@ -345,10 +348,11 @@ async function carregar(){
   const ehLocal=['localhost','127.0.0.1'].includes(location.hostname);
   try{
     if(cfg.token&&cfg.owner&&cfg.repo){modo='github';
-      const [d,c,p]=await Promise.all([ghRaw('anuncios.json'),ghCrm(),ghRaw('predios.json').catch(()=>null)]);DATA=d;crmSha=c.sha;CRM=Object.assign(novoCrm(),c.data||{});PRED=p||PRED}
+      const [d,c,p]=await Promise.all([ghRaw('anuncios.json'),ghCrm(),ghRaw('predios.json').catch(()=>null)]);DATA=d;crmSha=c.sha;CRM=Object.assign(novoCrm(),c.data||{});PRED=p||PRED;ITB=await ghRaw('itbi_cenario.json').catch(()=>null)}
     else if(cfg.local||ehLocal){modo='local';
       DATA=await fetch('dados/anuncios.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('sem dados locais');return r.json()});
       PRED=await fetch('dados/predios.json',{cache:'no-store'}).then(r=>r.ok?r.json():PRED).catch(()=>PRED);
+      ITB=await fetch('dados/itbi_cenario.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
       CRM=Object.assign(novoCrm(),LS.get('painel_crm_local',{}))}
     else{abrirSetup('Conecte o repositório para ver os dados.');return}
   }catch(e){$('#info').textContent='erro: '+e.message;abrirSetup('Não consegui ler os dados: '+e.message);return}
@@ -874,9 +878,58 @@ Custos de compra (ITBI, cartório e avaliação): ${brl(r.itbi+r.cartorio+REF.av
   atualizar();
 }
 
+
+/* ---------- ITBI: cenario de Porto Alegre, todos os tipos de imovel ---------- */
+const IPER=[['30','30 dias'],['90','90 dias'],['180','6 meses'],['365','12 meses']];
+const IRESID=['Apartamento','Cobertura','Flat','Casa','Casa em condomínio'];
+function alternarI(k,v){
+  if(k==='tipo')IFI.tipos=IFI.tipos.includes(v)?IFI.tipos.filter(x=>x!==v):[...IFI.tipos,v];
+  else if(k==='preset')IFI.tipos=v==='res'?[...IRESID]:v==='todos'?[...ITB.categorias]:ITB.categorias.filter(c=>!['Garagem','Outros'].includes(c));
+  else if(k==='lim')IFI.lim=IFI.lim>=9999?40:9999;
+  else IFI[k]=v;
+  LS.set('painel_ifiltros',IFI);renderItbi()}
+function agregarI(filtroBairro){
+  const ci=new Set(IFI.tipos.map(t=>ITB.categorias.indexOf(t))),per=IFI.per,por={},serie=new Array(24).fill(0);
+  for(const [bi,cj,p,a,sr] of ITB.linhas){
+    if(!ci.has(cj))continue;const b=ITB.bairros[bi];if(!filtroBairro(b))continue;
+    const R=por[b]||(por[b]={b,n:0,an:0,sb:0,ssb:0,sa:0});
+    R.n+=p[per][0];R.sb+=p[per][1];R.ssb+=p[per][2];R.sa+=p[per][3];R.an+=a[per][0];
+    for(let i=0;i<24;i++)serie[i]+=sr[i]}
+  return {rows:Object.values(por),serie}}
+const somaI=rows=>rows.reduce((t,r)=>({n:t.n+r.n,an:t.an+r.an,sb:t.sb+r.sb,ssb:t.ssb+r.ssb,sa:t.sa+r.sa}),{n:0,an:0,sb:0,ssb:0,sa:0});
+const varI=(n,an)=>an>=5?(n/an-1)*100:null;
+const fvarI=v=>v==null?'<span class="mut">–</span>':`<b style="color:${v>=0?'var(--ok)':'var(--bad)'}">${v>=0?'+':''}${v.toFixed(0)}%</b>`;
+function kpiI(titulo,t){const v=varI(t.n,t.an);
+  return `<div class="panel" style="flex:1;min-width:230px"><h3 style="margin-top:0">${titulo}</h3>
+   <div style="font-size:26px;font-weight:700">${t.n.toLocaleString('pt-BR')} <span class="mut" style="font-size:13px;font-weight:400">vendas</span></div>
+   <div class="mut">${fvarI(v)} contra o mesmo período de um ano antes (${t.an.toLocaleString('pt-BR')})</div>
+   <div style="margin-top:6px">Ticket médio <b>${t.n?mi(t.sb/t.n):'–'}</b> · R$/m² <b>${t.sa?money(t.ssb/t.sa):'–'}</b></div></div>`}
+function renderItbi(){const el=$('#tab-itbi');
+  if(!ITB||!ITB.linhas){el.innerHTML='<div class="panel"><h3>ITBI</h3><p class="mut">Os dados do cenário ainda não foram publicados. Rode o monitor de prédios (predios.py) para gerar o arquivo itbi_cenario.json.</p></div>';return}
+  const alvo=new Set(ITB.alvo),cid=agregarI(()=>true),meus=agregarI(b=>alvo.has(b));
+  const base=IFI.escopo==='alvo'?meus:cid,rows=base.rows.slice(),T=somaI(rows),tc=somaI(cid.rows),tm=somaI(meus.rows);
+  const chave={b:(x,y)=>x.b.localeCompare(y.b),n:(x,y)=>y.n-x.n,v:(x,y)=>(varI(y.n,y.an)??-1e9)-(varI(x.n,x.an)??-1e9),t:(x,y)=>(y.n?y.sb/y.n:0)-(x.n?x.sb/x.n:0),m:(x,y)=>(y.sa?y.ssb/y.sa:0)-(x.sa?x.ssb/x.sa:0)}[IFI.ord]||((x,y)=>y.n-x.n);
+  rows.sort(chave);const vis=rows.slice(0,IFI.lim),mx=Math.max(1,...base.serie);
+  const d=new Date(ITB.ate+'T12:00');let y=d.getFullYear(),m=d.getMonth();const rot=[];for(let i=0;i<24;i++){rot.unshift(`${MESES_S[m]}/${String(y).slice(2)}`);m--;if(m<0){m=11;y--}}
+  const chip=(k,v,t,on)=>`<span class="chip${on?' on':''}" data-ig="${k}" data-v="${esc(v)}">${esc(t)}</span>`;
+  const th=(k,t)=>`<th data-iord="${k}" style="cursor:pointer${IFI.ord===k?';color:var(--acc)':''}">${t}${IFI.ord===k?' ▾':''}</th>`;
+  el.innerHTML=`<div class="panel"><div class="chips"><b class="lbl">Período</b>${IPER.map(([v,t])=>chip('per',v,t,IFI.per===v)).join('')}</div>
+   <div class="chips"><b class="lbl">Bairros</b>${chip('escopo','alvo','Meus 10 bairros',IFI.escopo==='alvo')}${chip('escopo','todos','Porto Alegre inteira',IFI.escopo==='todos')}</div>
+   <div class="chips"><b class="lbl">Tipo</b>${chip('preset','res','Residencial',false)}${chip('preset','semgar','Tudo, sem garagem',false)}${chip('preset','todos','Todos',false)}</div>
+   <div class="chips"><b class="lbl"></b>${ITB.categorias.map(c=>chip('tipo',c,c,IFI.tipos.includes(c))).join('')}</div>
+   <p class="mut" style="margin:8px 0 0">Dados do ITBI pago até <b>${br(ITB.ate)}/${ITB.ate.slice(0,4)}</b> (a prefeitura publica em blocos, então a ponta mais recente fica vazia até o próximo). As janelas contam para trás a partir dessa data, não de hoje.</p></div>
+  <div style="display:flex;gap:12px;flex-wrap:wrap">${kpiI('Porto Alegre inteira',tc)}${kpiI('Meus 10 bairros',tm)}</div>
+  <div class="panel"><h3>Vendas por mês, últimos 24 meses (${IFI.escopo==='alvo'?'meus 10 bairros':'Porto Alegre inteira'})</h3>
+   <span style="display:inline-flex;align-items:flex-end;gap:3px;height:80px">${base.serie.map((n,i)=>`<i title="${rot[i]}: ${n}" style="display:block;width:10px;height:${Math.max(n?3:1,Math.round(78*n/mx))}px;background:${n?'var(--acc)':'var(--chip)'};border-radius:1px;opacity:${i===23?.55:1}"></i>`).join('')}</span>
+   <div class="mut" style="font-size:11px">${rot[0]} a ${rot[23]}; o último mês pode estar incompleto</div></div>
+  <div class="panel scroll"><h3>Por bairro</h3><table><tr>${th('b','Bairro')}${th('n','Vendas')}<th>Fatia</th>${th('v','Contra ano anterior')}${th('t','Ticket médio')}${th('m','R$/m² médio')}</tr>
+   ${vis.map(r=>`<tr><td>${alvo.has(r.b)?'<span title="um dos seus bairros-alvo" style="color:var(--acc)">●</span> ':''}${esc(r.b)}</td><td><b>${r.n}</b></td><td>${pct(r.n,T.n)}</td><td>${fvarI(varI(r.n,r.an))}</td><td>${r.n?mi(r.sb/r.n):'–'}</td><td>${r.sa?money(r.ssb/r.sa):'–'}</td></tr>`).join('')||'<tr><td colspan="6" class="mut">Nenhuma venda com esses filtros.</td></tr>'}</table>
+   ${rows.length>40?`<div class="bar"><button class="btn" data-ig="lim">${IFI.lim>=9999?'Mostrar só os 40 primeiros':`Mostrar todos os ${rows.length} bairros`}</button></div>`:''}
+   <p class="mut">Variação só aparece quando o ano anterior teve 5 vendas ou mais no mesmo recorte. R$/m² é a soma da base de cálculo dividida pela soma da área (privativa nos imóveis construídos, do lote nos terrenos), só das guias com área informada; garagens ficam fora do R$/m². A base de cálculo do ITBI pode ficar abaixo do preço real (vale o maior entre o declarado e o venal). Guias de transmissão parcial e sem data de pagamento são desconsideradas.</p></div>`}
+
 function renderTudo(){montarFiltros();renderLista();const ab=$('nav button.on').dataset.tab;if(ab!=='anuncios')mostrar(ab)}
 function mostrar(tab){$$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));$$('main>section').forEach(s=>s.hidden=s.id!=='tab-'+tab);
-  if(tab==='anuncios')renderLista();if(tab==='predios'){montarFiltrosP();renderPredios()}if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();if(tab==='guia')renderGuia();window.scrollTo(0,0)}
+  if(tab==='anuncios')renderLista();if(tab==='predios'){montarFiltrosP();renderPredios()}if(tab==='itbi')renderItbi();if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();if(tab==='guia')renderGuia();window.scrollTo(0,0)}
 function irPara(id){F=filtrosPadrao();F.status=[];LS.set('painel_filtros',F);mostrar('anuncios');montarFiltros();
   const a=ADS.find(x=>x.id===id);if(!a)return;abertos.add(id);$('#lista').innerHTML=card(a);$('#contagem').textContent='1 anúncio (toque em Limpar filtros para voltar à lista)';$('#btnMais').hidden=true}
 function irBairro(b){F=filtrosPadrao();F.bairros=[b];F.ordem='score';LS.set('painel_filtros',F);montarFiltros();mostrar('anuncios')}
@@ -897,6 +950,8 @@ document.addEventListener('click',e=>{const t=e.target;
   if(t.dataset.band!==undefined){[F.pmin,F.pmax]=t.dataset.band.split('|');LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista();return}
   if(t.dataset.g&&t.closest('#boxFiltros')){alternar(t.dataset.g,t.dataset.v);return}
   if(t.dataset.copy!==undefined){navigator.clipboard?.writeText(t.previousElementSibling.textContent);t.textContent='copiado';return}
+  if(t.dataset.ig){alternarI(t.dataset.ig,t.dataset.v);return}
+  if(t.dataset.iord){IFI.ord=t.dataset.iord;LS.set('painel_ifiltros',IFI);renderItbi();return}
   if(t.dataset.pg){alternarP(t.dataset.pg,t.dataset.v);return}
   if(t.dataset.pir){irPredio(t.dataset.pir);return}
   if(t.dataset.protap){const id=t.dataset.protap;ROTA.has(id)?ROTA.delete(id):ROTA.add(id);atualizarRota();pmapa&&pmapa.closePopup();renderPredios();return}
