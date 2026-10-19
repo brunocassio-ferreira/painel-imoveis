@@ -904,16 +904,19 @@ function kpiI(titulo,t){const v=varI(t.n,t.an);
    <div style="font-size:26px;font-weight:700">${t.n.toLocaleString('pt-BR')} <span class="mut" style="font-size:13px;font-weight:400">vendas</span></div>
    <div class="mut">${fvarI(v)} contra o mesmo período de um ano antes (${t.an.toLocaleString('pt-BR')})</div>
    <div style="margin-top:6px">Ticket médio <b>${t.n?mi(t.sb/t.n):'–'}</b> · R$/m² <b>${t.sa?money(t.ssb/t.sa):'–'}</b></div></div>`}
+const ITB_FONTE=[['Portal de Dados Abertos de Porto Alegre, conjunto ITBI (Secretaria Municipal da Fazenda)','https://dadosabertos.poa.br/dataset/itbi'],['API do conjunto (metadados e arquivos por ano)','https://dadosabertos.poa.br/api/3/action/package_show?id=itbi']];
+let ITB_VIEW=null;
+const itbiFonteHtml=()=>ITB_FONTE.map(([t,u])=>`<div>${esc(t)}: <a class="lk" href="${u}" target="_blank" rel="noopener">${u}</a></div>`).join('');
 function renderItbi(){const el=$('#tab-itbi');
   if(!ITB||!ITB.linhas){el.innerHTML='<div class="panel"><h3>ITBI</h3><p class="mut">Os dados do cenário ainda não foram publicados. Rode o monitor de prédios (predios.py) para gerar o arquivo itbi_cenario.json.</p></div>';return}
   const alvo=new Set(ITB.alvo),cid=agregarI(()=>true),meus=agregarI(b=>alvo.has(b));
   const base=IFI.escopo==='alvo'?meus:cid,rows=base.rows.slice(),T=somaI(rows),tc=somaI(cid.rows),tm=somaI(meus.rows);
   const chave={b:(x,y)=>x.b.localeCompare(y.b),n:(x,y)=>y.n-x.n,v:(x,y)=>(varI(y.n,y.an)??-1e9)-(varI(x.n,x.an)??-1e9),t:(x,y)=>(y.n?y.sb/y.n:0)-(x.n?x.sb/x.n:0),m:(x,y)=>(y.sa?y.ssb/y.sa:0)-(x.sa?x.ssb/x.sa:0)}[IFI.ord]||((x,y)=>y.n-x.n);
-  rows.sort(chave);const vis=rows.slice(0,IFI.lim),mx=Math.max(1,...base.serie);
+  rows.sort(chave);const vis=rows.slice(0,IFI.lim),mx=Math.max(1,...base.serie);ITB_VIEW={rows,base,T,tc,tm,alvo};
   const d=new Date(ITB.ate+'T12:00');let y=d.getFullYear(),m=d.getMonth();const rot=[];for(let i=0;i<24;i++){rot.unshift(`${MESES_S[m]}/${String(y).slice(2)}`);m--;if(m<0){m=11;y--}}
   const chip=(k,v,t,on)=>`<span class="chip${on?' on':''}" data-ig="${k}" data-v="${esc(v)}">${esc(t)}</span>`;
   const th=(k,t)=>`<th data-iord="${k}" style="cursor:pointer${IFI.ord===k?';color:var(--acc)':''}">${t}${IFI.ord===k?' ▾':''}</th>`;
-  el.innerHTML=`<div class="panel"><div class="chips"><b class="lbl">Período</b>${IPER.map(([v,t])=>chip('per',v,t,IFI.per===v)).join('')}</div>
+  el.innerHTML=`<div class="bar"><span class="grow mut">Os filtros abaixo valem também para o PDF.</span><button class="btn" data-itbipdf>PDF do cenário</button></div><div class="panel"><div class="chips"><b class="lbl">Período</b>${IPER.map(([v,t])=>chip('per',v,t,IFI.per===v)).join('')}</div>
    <div class="chips"><b class="lbl">Bairros</b>${chip('escopo','alvo','Meus 10 bairros',IFI.escopo==='alvo')}${chip('escopo','todos','Porto Alegre inteira',IFI.escopo==='todos')}</div>
    <div class="chips"><b class="lbl">Tipo</b>${chip('preset','res','Residencial',false)}${chip('preset','semgar','Tudo, sem garagem',false)}${chip('preset','todos','Todos',false)}</div>
    <div class="chips"><b class="lbl"></b>${ITB.categorias.map(c=>chip('tipo',c,c,IFI.tipos.includes(c))).join('')}</div>
@@ -925,7 +928,33 @@ function renderItbi(){const el=$('#tab-itbi');
   <div class="panel scroll"><h3>Por bairro</h3><table><tr>${th('b','Bairro')}${th('n','Vendas')}<th>Fatia</th>${th('v','Contra ano anterior')}${th('t','Ticket médio')}${th('m','R$/m² médio')}</tr>
    ${vis.map(r=>`<tr><td>${alvo.has(r.b)?'<span title="um dos seus bairros-alvo" style="color:var(--acc)">●</span> ':''}${esc(r.b)}</td><td><b>${r.n}</b></td><td>${pct(r.n,T.n)}</td><td>${fvarI(varI(r.n,r.an))}</td><td>${r.n?mi(r.sb/r.n):'–'}</td><td>${r.sa?money(r.ssb/r.sa):'–'}</td></tr>`).join('')||'<tr><td colspan="6" class="mut">Nenhuma venda com esses filtros.</td></tr>'}</table>
    ${rows.length>40?`<div class="bar"><button class="btn" data-ig="lim">${IFI.lim>=9999?'Mostrar só os 40 primeiros':`Mostrar todos os ${rows.length} bairros`}</button></div>`:''}
-   <p class="mut">Variação só aparece quando o ano anterior teve 5 vendas ou mais no mesmo recorte. R$/m² é a soma da base de cálculo dividida pela soma da área (privativa nos imóveis construídos, do lote nos terrenos), só das guias com área informada; garagens ficam fora do R$/m². A base de cálculo do ITBI pode ficar abaixo do preço real (vale o maior entre o declarado e o venal). Guias de transmissão parcial e sem data de pagamento são desconsideradas.</p></div>`}
+   <p class="mut">Variação só aparece quando o ano anterior teve 5 vendas ou mais no mesmo recorte. R$/m² é a soma da base de cálculo dividida pela soma da área (privativa nos imóveis construídos, do lote nos terrenos), só das guias com área informada; garagens ficam fora do R$/m². A base de cálculo do ITBI pode ficar abaixo do preço real (vale o maior entre o declarado e o venal). Guias de transmissão parcial e sem data de pagamento são desconsideradas.</p></div>
+  <div class="panel"><h3>Fonte dos dados</h3><div class="mut">${itbiFonteHtml()}<div>Licença e atualização: dados abertos publicados pela Prefeitura em blocos irregulares; este painel consulta o portal todos os dias e baixa o ano que mudou.</div></div></div>`}
+
+function gerarPdfItbi(){
+  if(!ITB||!ITB_VIEW)return;const w=window.open('','_blank');if(!w){alert('Libere pop-ups para este site para gerar o PDF.');return}
+  const {rows,base,T,tc,tm,alvo}=ITB_VIEW,per=(IPER.find(p=>p[0]===IFI.per)||[])[1],mx=Math.max(1,...base.serie);
+  const d=new Date(ITB.ate+'T12:00');let y=d.getFullYear(),m=d.getMonth();const rot=[];for(let i=0;i<24;i++){rot.unshift(`${MESES_S[m]}/${String(y).slice(2)}`);m--;if(m<0){m=11;y--}}
+  const kpi=(t,x)=>`<div class="k"><b>${t}</b><div class="n">${x.n.toLocaleString('pt-BR')} vendas</div><div>${x.an>=5?fvarPdf(varI(x.n,x.an)):'sem base de comparação'} contra o mesmo período de um ano antes (${x.an.toLocaleString('pt-BR')})</div><div>Ticket médio ${x.n?mi(x.sb/x.n):'–'} · R$/m² ${x.sa?money(x.ssb/x.sa):'–'}</div></div>`;
+  const fvarPdf=v=>v==null?'–':(v>=0?'+':'')+v.toFixed(0)+'%';
+  w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Cenário ITBI Porto Alegre ${HOJE_ISO}</title>
+<style>@page{size:A4;margin:12mm}body{font:12.5px/1.4 Arial,sans-serif;color:#222;background:#fff;margin:12px}h1{font-size:19px;margin:0 0 4px}h2{font-size:14px;background:#E3DCFA;padding:4px 8px;margin:14px 0 6px;break-after:avoid}
+.top{color:#555;margin-bottom:8px}.kk{display:flex;gap:10px}.k{flex:1;border:1px solid #ccc;border-radius:6px;padding:8px}.k .n{font-size:18px;font-weight:bold}
+table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left;font-size:12px}th{color:#555}tr{break-inside:avoid}
+.g{display:flex;align-items:flex-end;gap:3px;height:70px}.g i{display:block;width:12px;background:#4A1FD0}.nota{color:#555;font-size:11px}a{color:#0b5cad;word-break:break-all}@media print{.noprint{display:none}}</style></head><body>
+<button class="noprint" onclick="print()" style="padding:8px 14px;margin-bottom:10px">Salvar em PDF / imprimir</button>
+<h1>Cenário de vendas pelo ITBI, Porto Alegre</h1>
+<div class="top">Gerado em ${br(HOJE_ISO)}/${HOJE_ISO.slice(0,4)} · dados do ITBI pago até ${br(ITB.ate)}/${ITB.ate.slice(0,4)} · período: ${per} · bairros: ${IFI.escopo==='alvo'?'10 bairros-alvo':'Porto Alegre inteira'} · tipos: ${esc(IFI.tipos.join(', ')||'nenhum')}</div>
+<div class="kk">${kpi('Porto Alegre inteira',tc)}${kpi('Meus 10 bairros',tm)}</div>
+<h2>Vendas por mês, últimos 24 meses (${IFI.escopo==='alvo'?'10 bairros-alvo':'Porto Alegre inteira'})</h2>
+<div class="g">${base.serie.map(n=>`<i style="height:${Math.max(n?2:1,Math.round(68*n/mx))}px"></i>`).join('')}</div><div class="nota">${rot[0]} a ${rot[23]} · barras: ${base.serie.join(', ')} · o último mês pode estar incompleto</div>
+<h2>Por bairro (${rows.length})</h2>
+<table><tr><th>Bairro</th><th>Vendas</th><th>Fatia</th><th>Contra ano anterior</th><th>Ticket médio</th><th>R$/m² médio</th></tr>
+${rows.map(r=>`<tr><td>${alvo.has(r.b)?'● ':''}${esc(r.b)}</td><td><b>${r.n}</b></td><td>${pct(r.n,T.n)}</td><td>${fvarPdf(varI(r.n,r.an))}</td><td>${r.n?mi(r.sb/r.n):'–'}</td><td>${r.sa?money(r.ssb/r.sa):'–'}</td></tr>`).join('')}</table>
+<p class="nota">● = bairro-alvo. Variação só aparece quando o ano anterior teve 5 vendas ou mais no recorte. R$/m² é a soma da base de cálculo dividida pela soma da área (privativa nos imóveis construídos, do lote nos terrenos), só das guias com área informada; garagens ficam fora do R$/m². A base de cálculo do ITBI pode ficar abaixo do preço real (vale o maior entre o declarado e o venal). Guias de transmissão parcial e sem data de pagamento são desconsideradas. As janelas contam para trás a partir da data do último pagamento publicado, não de hoje.</p>
+<h2>Fonte das informações</h2>${ITB_FONTE.map(([t,u])=>`<div>${esc(t)}:<br><a href="${u}">${u}</a></div>`).join('<br>')}
+</body></html>`);
+  w.document.close();setTimeout(()=>w.print(),500)}
 
 function renderTudo(){montarFiltros();renderLista();const ab=$('nav button.on').dataset.tab;if(ab!=='anuncios')mostrar(ab)}
 function mostrar(tab){$$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));$$('main>section').forEach(s=>s.hidden=s.id!=='tab-'+tab);
@@ -950,6 +979,7 @@ document.addEventListener('click',e=>{const t=e.target;
   if(t.dataset.band!==undefined){[F.pmin,F.pmax]=t.dataset.band.split('|');LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista();return}
   if(t.dataset.g&&t.closest('#boxFiltros')){alternar(t.dataset.g,t.dataset.v);return}
   if(t.dataset.copy!==undefined){navigator.clipboard?.writeText(t.previousElementSibling.textContent);t.textContent='copiado';return}
+  if(t.dataset.itbipdf!==undefined){gerarPdfItbi();return}
   if(t.dataset.ig){alternarI(t.dataset.ig,t.dataset.v);return}
   if(t.dataset.iord){IFI.ord=t.dataset.iord;LS.set('painel_ifiltros',IFI);renderItbi();return}
   if(t.dataset.pg){alternarP(t.dataset.pg,t.dataset.v);return}
