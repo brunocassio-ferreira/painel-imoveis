@@ -598,6 +598,11 @@ const MESES_S=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov'
 function spark(serie){if(!serie||!serie.some(x=>x))return '';const mx=Math.max(...serie),h=n=>Math.max(n?3:1,Math.round(26*n/mx));
   const d=new Date();let y=d.getFullYear(),m=d.getMonth();const rot=[];for(let i=0;i<serie.length;i++){rot.unshift(`${MESES_S[m]}/${String(y).slice(2)}`);m--;if(m<0){m=11;y--}}
   return `<span style="display:inline-flex;align-items:flex-end;gap:2px;height:28px;margin-top:4px" title="vendas por mês, últimos 24 meses (data de pagamento do ITBI)">${serie.map((n,i)=>`<i title="${rot[i]}: ${n}" style="display:block;width:7px;height:${h(n)}px;background:${n?'var(--acc)':'var(--chip)'};border-radius:1px"></i>`).join('')}</span> <span class="mut" style="font-size:11px">24 meses</span>`}
+const IJ_TXT={v30:'30 dias',v90:'90 dias',v180:'6 meses',v365:'12 meses'},IJ_CURTO={v7:'7d',v30:'30d',v90:'90d',v180:'6m',v365:'12m'};
+function itbiResumo(it){const k=PF.ij||'v365',n=it[k]||0;
+  // destaque no periodo escolhido no filtro; os demais ficam como apoio, sempre rotulados
+  const outros=['v7','v30','v90','v180','v365'].filter(x=>x!==k).map(x=>`${it[x]||0} em ${IJ_CURTO[x]}`).join(' · ');
+  return `<b>${n} venda${n===1?'':'s'} em ${IJ_TXT[k]}</b> (ITBI pago) · ${outros}${it.m2_med?` · R$ ${it.m2_med.toLocaleString('pt-BR')}/m² pago (mediana de 12 meses)`:''}${it.ano_constr?` · construção ${it.ano_constr}`:''}`}
 function cardPredio(p){const f=pficha(p.id),ab=pabertos.has(p.id);const tags=[];
   if(p.fase==='recente')tags.push(`<span class="tag novo">entregue ${p.entrega?br(p.entrega):'recentemente'}</span>`);
   if(p.fase==='obra')tags.push(`<span class="tag est">em obra${p.entrega?' · entrega '+br(p.entrega):''}</span>`);
@@ -613,7 +618,7 @@ function cardPredio(p){const f=pficha(p.id),ab=pabertos.has(p.id);const tags=[];
   <div class="preco">${esc(p.nome)}</div>
   <div class="loc"><b>${esc(p.bairro)}</b> · ${esc(endereco(p))}</div>
   ${p.total?`<div class="det"><b>${p.total} à venda</b> · ${mi(p.preco_min)}${p.preco_max>p.preco_min?' a '+mi(p.preco_max):''}${p.areas.length?' · '+esc(p.areas.slice(0,6).join(', '))+' m²':''}</div>`:''}
-  ${p.itbi?`<div class="det"><b>${p.itbi.v365} vendas em 12 meses</b> (ITBI pago) · ${p.itbi.v180} em 6m · ${p.itbi.v90} em 90d · ${p.itbi.v30} em 30d · ${p.itbi.v7} em 7d${p.itbi.m2_med?` · R$ ${p.itbi.m2_med.toLocaleString('pt-BR')}/m² pago`:''}${p.itbi.ano_constr?` · construção ${p.itbi.ano_constr}`:''}<br>${spark(p.itbi.serie)}</div>`:''}
+  ${p.itbi?`<div class="det">${itbiResumo(p.itbi)}<br>${spark(p.itbi.serie)}</div>`:''}
   <div class="datas">${p.rua_total?`${p.rua_total} anúncios na mesma rua (todos os sites)`:''}${p.perto.length?`${p.rua_total?' · ':''}${p.perto.length} prédio${p.perto.length>1?'s':''} com anúncio a até 300 m`:''}</div>
   <div class="acoes"><a class="btn" href="${esc(mapsUrl(p))}" target="_blank" rel="noopener">Mapa ↗</a>
    ${p.total?`<button class="btn" data-pact="unid">Unidades ${punid.has(p.id)?'▴':'▾'}</button>`:''}
@@ -663,7 +668,7 @@ function renderMapaPredios(r){
   setTimeout(()=>pmapa.invalidateSize(),50);pcamadas.clearLayers();const pts=[];
   for(const p of r.filter(p=>p.lat)){const cor=PSTM[pficha(p.id).status]?.cor||'#8a8a8a';pts.push([p.lat,p.lng]);
     L.circleMarker([p.lat,p.lng],{radius:5+Math.min(14,2*Math.sqrt(PF.ordem==='total'?p.total:Math.max(iv(p),1))*1.6),color:ROTA.has(p.id)?'#d62828':cor,weight:ROTA.has(p.id)?3:1,fillColor:cor,fillOpacity:.7}).addTo(pcamadas)
-     .bindPopup(`<b>${esc(p.nome)}</b><br>${esc(endereco(p))} · ${esc(p.bairro)}<br>${p.total} à venda${p.fora_rede?` (${p.fora_rede} fora da rede)`:''}${p.itbi?` · ${p.itbi.v365} vendas em 12m (ITBI)`:''}<br>${esc(PSTM[pficha(p.id).status]?.nome)}<br><a class="lk" data-pir="${esc(p.id)}">abrir ficha</a> · <a class="lk" data-protap="${esc(p.id)}">${ROTA.has(p.id)?'tirar do':'pôr no'} roteiro</a>`)}
+     .bindPopup(`<b>${esc(p.nome)}</b><br>${esc(endereco(p))} · ${esc(p.bairro)}<br>${p.total} à venda${p.fora_rede?` (${p.fora_rede} fora da rede)`:''}${p.itbi?` · ${p.itbi[PF.ij||'v365']||0} vendas em ${IJ_CURTO[PF.ij||'v365']} (ITBI)`:''}<br>${esc(PSTM[pficha(p.id).status]?.nome)}<br><a class="lk" data-pir="${esc(p.id)}">abrir ficha</a> · <a class="lk" data-protap="${esc(p.id)}">${ROTA.has(p.id)?'tirar do':'pôr no'} roteiro</a>`)}
   if(pts.length)pmapa.fitBounds(pts,{padding:[20,20],maxZoom:16})}
 function irPredio(id){PF={...predFiltroPadrao(),fases:[],min:'',visao:'lista'};const p=PL.find(x=>x.id===id);if(!p)return;
   pmapa&&pmapa.closePopup();PF.texto=p.nome;montarFiltrosP();pabertos.add(id);mostrar('predios')}
