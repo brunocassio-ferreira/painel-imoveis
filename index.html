@@ -107,6 +107,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
     <button data-tab="vitrine">Vitrine</button>
     <button data-tab="imobiliarias">Imobiliárias</button>
     <button data-tab="itbi">ITBI</button>
+    <button data-tab="acoes">Ações</button>
     <button data-tab="funil">Funil</button>
     <button data-tab="mapa">Mapa</button>
     <button data-tab="intel">Inteligência</button>
@@ -190,6 +191,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
   <section id="tab-vitrine" hidden></section>
   <section id="tab-imobiliarias" hidden></section>
   <section id="tab-itbi" hidden></section>
+  <section id="tab-acoes" hidden></section>
   <section id="tab-funil" hidden></section>
   <section id="tab-mapa" hidden>
     <div class="bar"><label class="mut">Medir por <select id="mMetrica">
@@ -353,12 +355,13 @@ async function carregar(){
   const ehLocal=['localhost','127.0.0.1'].includes(location.hostname);
   try{
     if(cfg.token&&cfg.owner&&cfg.repo){modo='github';
-      const [d,c,p]=await Promise.all([ghRaw('anuncios.json'),ghCrm(),ghRaw('predios.json').catch(e=>{window.PRED_ERRO=String(e.message||e);return null})]);DATA=d;crmSha=c.sha;CRM=Object.assign(novoCrm(),c.data||{});PRED=p||PRED;ITB=await ghRaw('itbi_cenario.json').catch(()=>null);VIT=await ghRaw('vitrine.json').catch(()=>null);IMB=await ghRaw('imobiliarias.json').catch(()=>null)}
+      const [d,c,p]=await Promise.all([ghRaw('anuncios.json'),ghCrm(),ghRaw('predios.json').catch(e=>{window.PRED_ERRO=String(e.message||e);return null})]);DATA=d;crmSha=c.sha;CRM=Object.assign(novoCrm(),c.data||{});PRED=p||PRED;ITB=await ghRaw('itbi_cenario.json').catch(()=>null);VIT=await ghRaw('vitrine.json').catch(()=>null);ACO=await ghRaw('acoes.json').catch(()=>null);IMB=await ghRaw('imobiliarias.json').catch(()=>null)}
     else if(cfg.local||ehLocal){modo='local';
       DATA=await fetch('dados/anuncios.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('sem dados locais');return r.json()});
       PRED=await fetch('dados/predios.json',{cache:'no-store'}).then(r=>r.ok?r.json():PRED).catch(()=>PRED);
       ITB=await fetch('dados/itbi_cenario.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
       VIT=await fetch('dados/vitrine.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
+      ACO=await fetch('dados/acoes.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
       IMB=await fetch('dados/imobiliarias.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
       CRM=Object.assign(novoCrm(),LS.get('painel_crm_local',{}))}
     else{abrirSetup('Conecte o repositório para ver os dados.');return}
@@ -970,6 +973,63 @@ ${rows.map(r=>`<tr><td>${alvo.has(r.b)?'● ':''}${esc(r.b)}</td><td><b>${r.n}</
 </body></html>`);
   w.document.close();setTimeout(()=>w.print(),500)}
 
+/* ---------- Ações das construtoras ---------- */
+let ACO=null, ACF=Object.assign({seg:'',ord:'r3m',aberto:''},LS.get('painel_acfiltros',{}));
+const ACSEG=[['','Todas'],['eco','Econômico (MCMV)'],['alto','Médio e alto padrão'],['rs','Atuam no RS']];
+const acOk=x=>!ACF.seg||(ACF.seg==='eco'&&/Econ/.test(x.segmento))||(ACF.seg==='alto'&&/alto|Médio/.test(x.segmento))||(ACF.seg==='rs'&&(x.rs==='sim'||x.rs==='sede'));
+const acNum=(v,d=1)=>v==null?'–':(+v).toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const acPct=v=>v==null?'<span class="mut">–</span>':`<span style="color:${v>=0?'var(--ok)':'var(--bad)'};font-weight:600">${v>0?'+':''}${acNum(v)}%</span>`;
+const acBi=v=>v==null?'–':'R$ '+acNum(v,v<1?2:1)+' bi';
+function acSpark(s){if(!s||s.length<3)return'';const mn=Math.min(...s),mx=Math.max(...s),w=84,h=24,pt=s.map((v,i)=>`${(i/(s.length-1)*w).toFixed(1)},${(h-2-(v-mn)/((mx-mn)||1)*(h-4)).toFixed(1)}`).join(' ');
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-hidden="true"><polyline fill="none" stroke="${s[s.length-1]>=s[0]?'var(--ok)':'var(--bad)'}" stroke-width="1.6" points="${pt}"/></svg>`}
+function acPearson(a,b){const n=a.length,ma=a.reduce((x,y)=>x+y,0)/n,mb=b.reduce((x,y)=>x+y,0)/n;let sab=0,saa=0,sbb=0;for(let i=0;i<n;i++){sab+=(a[i]-ma)*(b[i]-mb);saa+=(a[i]-ma)**2;sbb+=(b[i]-mb)**2}return saa&&sbb?sab/Math.sqrt(saa*sbb):null}
+function acDetalhe(x){const f=x.fund;
+  if(!f)return`<tr class="acdet"><td colspan="11" style="white-space:normal"><span class="mut">Só cotação por enquanto: os resultados do 2T26 desta empresa ainda não foram levantados.</span></td></tr>`;
+  const k=(t,v)=>v?`<div><span class="mut">${t}</span><br><b>${v}</b></div>`:'';
+  return`<tr class="acdet"><td colspan="11" style="white-space:normal;background:var(--chip)"><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:8px 14px">
+   ${k('VGV lançado no 2T26',f.lanc!=null?acBi(f.lanc)+(f.lanc_yoy!=null?` (${f.lanc_yoy>0?'+':''}${acNum(f.lanc_yoy)}% no ano)`:''):'')}${k('Vendas líquidas 2T26',f.vendas!=null?acBi(f.vendas)+(f.vendas_yoy!=null?` (${f.vendas_yoy>0?'+':''}${acNum(f.vendas_yoy)}%)`:''):'')}
+   ${k('Velocidade de vendas (VSO)',esc(f.vso||''))}${k('Lucro líquido 2T26',f.lucro!=null?'R$ '+acNum(f.lucro)+' mi'+(f.lucro_yoy!=null?` (${f.lucro_yoy>0?'+':''}${acNum(f.lucro_yoy)}%)`:''):'')}
+   ${k('ROE (12 meses)',f.roe!=null?acNum(f.roe)+'%':'')}${k('Dívida e caixa',esc(f.divida||''))}${k('Guidance e eventos',esc(f.guid||''))}${k('Prévia do 3T26',esc(f.t3||''))}</div>
+   <p style="margin:8px 0 4px">${esc(f.nota||'')}</p><div class="mut">Praça: ${esc(x.praca)}. Fontes: ${(f.fontes||[]).map(([t,u])=>`<a class="lk" href="${esc(safeUrl(u))}" target="_blank" rel="noopener">${esc(t)}</a>`).join(' · ')}</div></td></tr>`}
+function renderAcoes(){const el=$('#tab-acoes');
+  if(!ACO||!ACO.itens){el.innerHTML='<div class="panel"><h3>Ações das construtoras</h3><p class="mut">Os dados ainda não foram publicados. Rode acoes.py na pasta monitor para gerar o acoes.json.</p></div>';return}
+  const B=ACO.bench,todos=ACO.itens,L=todos.filter(acOk);
+  const chave={nome:(a,b)=>a.nome.localeCompare(b.nome),lanc:(a,b)=>(b.fund?.lanc_yoy??-1e9)-(a.fund?.lanc_yoy??-1e9)}[ACF.ord]||((a,b)=>(b[ACF.ord]??-1e9)-(a[ACF.ord]??-1e9));
+  L.sort(chave);
+  const com=todos.filter(x=>x.fund&&x.fund.lanc_yoy!=null&&x.r3m!=null),X=com.map(x=>x.fund.lanc_yoy),r=com.length>3?acPearson(X,com.map(x=>x.r3m)):null,r12=com.length>3?acPearson(X,com.map(x=>x.r12m)):null;
+  const grupo=(t,f)=>{const g=com.filter(x=>f(x.fund.lanc_yoy));return`<tr><td>${t}</td><td><b>${g.length}</b></td><td>${g.length?acPct(g.reduce((s,x)=>s+x.r3m,0)/g.length):'–'}</td><td>${g.length?acPct(g.reduce((s,x)=>s+x.r12m,0)/g.length):'–'}</td><td class="mut" style="white-space:normal">${g.map(x=>x.nome).join(', ')||'–'}</td></tr>`};
+  const forca=v=>Math.abs(v)<0.3?'sem relação clara':Math.abs(v)<0.6?'relação moderada':'relação forte',leitura=r==null?'':`em 3 meses, ${forca(r)}; em 12 meses, ${forca(r12)}${r12>0.3?' (mas esse retorno de 12 meses vem em boa parte de antes dos lançamentos: empresa com ação em alta capta mais barato e lança mais, então a causa pode ser a inversa)':''}`;
+  const chip=(k,v,t,on)=>`<span class="chip${on?' on':''}" data-ac${k}="${esc(v)}">${esc(t)}</span>`;
+  const th=(k,t,tt)=>`<th data-acord="${k}" title="${esc(tt||'')}" style="cursor:pointer${ACF.ord===k?';color:var(--acc)':''}">${t}${ACF.ord===k?' ▾':''}</th>`;
+  const emAlta=todos.filter(x=>x.r3m>0).length;
+  el.innerHTML=`<div class="kpis"><div class="kpi"><b>${esc(ACO.macro.selic.split(' ')[0])}</b><span>Selic (${esc(ACO.macro.prox.replace('Próxima decisão do Copom: ',''))} é o próximo Copom)</span></div>
+   <div class="kpi"><b>${acPct(B.r3m)}</b><span>Ibovespa em 3 meses</span></div><div class="kpi"><b>${acPct(B.ytd)}</b><span>Ibovespa no ano</span></div>
+   <div class="kpi"><b>${emAlta} de ${todos.length}</b><span>construtoras em alta em 3 meses</span></div></div>
+  <div class="panel"><h3>Construtoras na bolsa: crescimento e preço da ação</h3>
+   <p class="mut" style="margin:0 0 8px">Cotações do Yahoo Finance (atualizadas em ${esc((ACO.gerado_em||'').replace('T',' às '))}, com atraso). Fundamentos do 2T26 e prévia do 3T26, levantados em notícias dos resultados; conferir o release de RI antes de decidir qualquer coisa. Painel de acompanhamento do setor, não recomendação de investimento.</p>
+   <div class="chips">${ACSEG.map(([v,t])=>chip('seg',v,t,ACF.seg===v)).join('')}</div></div>
+  <div class="panel scroll"><table><tr>${th('nome','Empresa')}<th>Segmento</th><th>Preço</th>${th('r1m','1 mês')}${th('r3m','3 meses','Retorno desde que os balanços do 2T26 saíram, em agosto')}${th('r12m','12 meses')}${th('ytd','No ano')}${th('da_max','Da máxima','Distância do maior preço dos últimos 12 meses')}${th('lanc','Lançamentos 2T26','VGV lançado contra o mesmo trimestre do ano anterior')}<th>ROE</th><th>1 ano</th></tr>
+   ${L.map(x=>{const f=x.fund,ab=ACF.aberto===x.tk;return`<tr data-acab="${x.tk}" style="cursor:pointer${ab?';background:var(--chip)':''}"><td><b>${esc(x.nome)}</b> <span class="mut">${x.tk}</span>${x.rs==='sede'?' <span class="tag prop" title="Sede em Porto Alegre">POA</span>':x.rs==='sim'?' <span class="tag est" title="Opera no RS">RS</span>':''}</td><td class="mut">${esc(x.segmento)}</td>
+    <td>R$ ${acNum(x.preco,2)} ${acPct(x.dia)}</td><td>${acPct(x.r1m)}</td><td>${acPct(x.r3m)}</td><td>${acPct(x.r12m)}</td><td>${acPct(x.ytd)}</td><td>${acPct(x.da_max)}</td>
+    <td>${f&&f.lanc_yoy!=null?acPct(f.lanc_yoy):'<span class="mut">–</span>'}</td><td>${f&&f.roe!=null?acNum(f.roe)+'%':'<span class="mut">–</span>'}</td><td>${acSpark(x.serie)}</td></tr>${ab?acDetalhe(x):''}`}).join('')}
+   <tr style="color:var(--mut)"><td>${esc(B.nome)}</td><td></td><td>R$ ${acNum(B.preco,2)}</td><td>${acPct(B.r1m)}</td><td>${acPct(B.r3m)}</td><td>${acPct(B.r12m)}</td><td>${acPct(B.ytd)}</td><td>${acPct(B.da_max)}</td><td></td><td></td><td>${acSpark(B.serie)}</td></tr></table>
+   <p class="mut">Toque numa linha para ver os fundamentos e as fontes. Retornos com dividendos reinvestidos. "Da máxima" é a distância até o maior preço dos últimos 12 meses.</p></div>
+  <div class="panel"><h3>A tese: quando a construtora cresce, o investimento vem junto?</h3>
+   <p class="mut" style="margin:0 0 8px">Cruzei o crescimento dos lançamentos no 2T26 (contra o 2T25) com o retorno da ação nos 3 meses seguintes aos balanços e em 12 meses.</p>
+   <div class="scroll"><table><tr><th>Lançamentos</th><th>Empresas</th><th>Ação em 3 meses (média)</th><th>Ação em 12 meses (média)</th><th>Quem</th></tr>
+   ${grupo('Crescendo (+20% ou mais)',v=>v>=20)}${grupo('Estáveis (-20% a +20%)',v=>v>-20&&v<20)}${grupo('Caindo (-20% ou menos)',v=>v<=-20)}</table></div>
+   <p style="margin:8px 0 0">${r==null?'':`Correlação entre o crescimento dos lançamentos e o retorno em 3 meses: <b>${acNum(r,2)}</b>; com o retorno em 12 meses: <b>${acNum(r12,2)}</b> (${com.length} empresas). Leitura: ${leitura}.`}</p>
+   <p class="mut">Com tão poucas empresas, isso é indício, não prova. A ação sobe e desce com juros, MCMV e câmbio, e o preço de agora já embute parte do que a empresa lançou. Lançamento forte vira investimento (obra, banco de terrenos, contratação) com defasagem de trimestres, então o melhor uso desta tabela é acompanhar a mesma empresa de um trimestre para o outro.</p></div>
+  <div class="panel"><h3>O que isso diz para a captação em Porto Alegre</h3>
+   <ul class="ins"><li><b>Juros.</b> A Selic está em ${esc(ACO.macro.selic)}. Corte ajuda o financiamento fora do MCMV, que é o comprador do usado de médio e alto padrão que você capta. ${esc(ACO.macro.nota)}</li>
+   <li><b>Termômetro local.</b> A Melnick é a única com sede em Porto Alegre e a Tenda também opera no RS. No 2T26 a Melnick lançou um empreendimento só e as vendas dela caíram 67%, sinal de comprador local cauteloso. O balanço do 3T26 (novembro) mostra se virou.</li>
+   <li><b>Ação em alta não é demanda em Porto Alegre.</b> Cyrela e Eztec concentram lançamentos em São Paulo; o preço delas sobe com a expectativa de juros menores. Use o painel para ler o ciclo do setor e não como medida do bairro, que vem do ITBI e dos anúncios.</li>
+   <li><b>Gafisa.</b> Cotação de centavos, prejuízo, dívida de R$ 1,6 bi e disputa de controle: é caso de risco, não de crescimento.</li></ul>
+   <p class="mut">Esta seção é leitura, não dado. As fontes de cada empresa estão ao tocar na linha; cotação: <a class="lk" href="https://finance.yahoo.com/" target="_blank" rel="noopener">Yahoo Finance</a>; Selic: <a class="lk" href="${esc(safeUrl(ACO.macro.fonte[1]))}" target="_blank" rel="noopener">${esc(ACO.macro.fonte[0])}</a>.</p></div>`}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-acseg],[data-acord],[data-acab]');if(!t)return;
+  if(t.dataset.acseg!==undefined)ACF.seg=t.dataset.acseg;else if(t.dataset.acord)ACF.ord=t.dataset.acord;else if(t.dataset.acab)ACF.aberto=ACF.aberto===t.dataset.acab?'':t.dataset.acab;
+  LS.set('painel_acfiltros',ACF);renderAcoes()});
+
 /* ---------- Vitrine Auxiliadora ---------- */
 let VIT=null, VF=Object.assign({bairros:[],tipos:[],ordem:'indice',foto:'',suder:false,marca:true,lim:24},LS.get('painel_vfiltros',{}));
 const VTIPOS=[['apto','Apartamento'],['cobertura','Cobertura'],['casa','Casa']];
@@ -1083,7 +1143,7 @@ document.addEventListener('input',e=>{if(e.target.id==='imTexto'){IMF.texto=e.ta
 
 function renderTudo(){montarFiltros();renderLista();const ab=$('nav button.on').dataset.tab;if(ab!=='anuncios')mostrar(ab)}
 function mostrar(tab){$$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));$$('main>section').forEach(s=>s.hidden=s.id!=='tab-'+tab);
-  if(tab==='anuncios')renderLista();if(tab==='predios'){montarFiltrosP();renderPredios()}if(tab==='vitrine')renderVitrine();if(tab==='imobiliarias')renderImobiliarias();if(tab==='itbi')renderItbi();if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();if(tab==='guia')renderGuia();window.scrollTo(0,0)}
+  if(tab==='anuncios')renderLista();if(tab==='predios'){montarFiltrosP();renderPredios()}if(tab==='vitrine')renderVitrine();if(tab==='imobiliarias')renderImobiliarias();if(tab==='itbi')renderItbi();if(tab==='acoes')renderAcoes();if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();if(tab==='guia')renderGuia();window.scrollTo(0,0)}
 function irPara(id){F=filtrosPadrao();F.status=[];LS.set('painel_filtros',F);mostrar('anuncios');montarFiltros();
   const a=ADS.find(x=>x.id===id);if(!a)return;abertos.add(id);$('#lista').innerHTML=card(a);$('#contagem').textContent='1 anúncio (toque em Limpar filtros para voltar à lista)';$('#btnMais').hidden=true}
 function irBairro(b){F=filtrosPadrao();F.bairros=[b];F.ordem='score';LS.set('painel_filtros',F);montarFiltros();mostrar('anuncios')}
