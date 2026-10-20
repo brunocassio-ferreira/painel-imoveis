@@ -90,6 +90,7 @@ dialog label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var
 .resp b{display:block;margin-bottom:3px}
 ol.fluxo{padding-left:22px;margin:6px 0}
 ol.fluxo li{margin-bottom:7px;line-height:1.45}
+  .vfotos{display:grid;grid-template-columns:2fr 1fr 1fr;gap:3px;height:128px;margin-bottom:4px}.vfotos img{width:100%;height:100%;object-fit:cover;border-radius:6px;background:var(--chip)}
 @media (max-width:600px){.crm{grid-template-columns:1fr}#lista,.grade{grid-template-columns:1fr}.hb .l{width:100px}}
 </style>
 </head>
@@ -103,6 +104,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
   <nav>
     <button data-tab="anuncios" class="on">Anúncios</button>
     <button data-tab="predios">Prédios</button>
+    <button data-tab="vitrine">Vitrine</button>
     <button data-tab="itbi">ITBI</button>
     <button data-tab="funil">Funil</button>
     <button data-tab="mapa">Mapa</button>
@@ -184,6 +186,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
     <div id="pLista"></div>
     <div class="bar"><button class="btn" id="pMais" hidden>Mostrar mais</button></div>
   </section>
+  <section id="tab-vitrine" hidden></section>
   <section id="tab-itbi" hidden></section>
   <section id="tab-funil" hidden></section>
   <section id="tab-mapa" hidden>
@@ -348,11 +351,12 @@ async function carregar(){
   const ehLocal=['localhost','127.0.0.1'].includes(location.hostname);
   try{
     if(cfg.token&&cfg.owner&&cfg.repo){modo='github';
-      const [d,c,p]=await Promise.all([ghRaw('anuncios.json'),ghCrm(),ghRaw('predios.json').catch(()=>null)]);DATA=d;crmSha=c.sha;CRM=Object.assign(novoCrm(),c.data||{});PRED=p||PRED;ITB=await ghRaw('itbi_cenario.json').catch(()=>null)}
+      const [d,c,p]=await Promise.all([ghRaw('anuncios.json'),ghCrm(),ghRaw('predios.json').catch(()=>null)]);DATA=d;crmSha=c.sha;CRM=Object.assign(novoCrm(),c.data||{});PRED=p||PRED;ITB=await ghRaw('itbi_cenario.json').catch(()=>null);VIT=await ghRaw('vitrine.json').catch(()=>null)}
     else if(cfg.local||ehLocal){modo='local';
       DATA=await fetch('dados/anuncios.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('sem dados locais');return r.json()});
       PRED=await fetch('dados/predios.json',{cache:'no-store'}).then(r=>r.ok?r.json():PRED).catch(()=>PRED);
       ITB=await fetch('dados/itbi_cenario.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
+      VIT=await fetch('dados/vitrine.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
       CRM=Object.assign(novoCrm(),LS.get('painel_crm_local',{}))}
     else{abrirSetup('Conecte o repositório para ver os dados.');return}
   }catch(e){$('#info').textContent='erro: '+e.message;abrirSetup('Não consegui ler os dados: '+e.message);return}
@@ -956,9 +960,80 @@ ${rows.map(r=>`<tr><td>${alvo.has(r.b)?'● ':''}${esc(r.b)}</td><td><b>${r.n}</
 </body></html>`);
   w.document.close();setTimeout(()=>w.print(),500)}
 
+/* ---------- Vitrine Auxiliadora ---------- */
+let VIT=null, VF=Object.assign({bairros:[],tipos:[],ordem:'indice',foto:'',suder:false,marca:true,lim:24},LS.get('painel_vfiltros',{}));
+const VTIPOS=[['apto','Apartamento'],['cobertura','Cobertura'],['casa','Casa']];
+const vTitulo=s=>String(s||'').toLowerCase().replace(/(^|\s)\S/g,c=>c.toUpperCase());
+function vGrupo(t){t=(t||'').toLowerCase();return t.includes('cobertura')?'cobertura':(t.includes('casa')||t.includes('sobrado'))?'casa':'apto'}
+function vLista(){
+  if(!VIT||!VIT.itens)return [];
+  const L=VIT.itens.filter(x=>(!VF.bairros.length||VF.bairros.includes(x.bairro))&&(!VF.tipos.length||VF.tipos.includes(vGrupo(x.tipo)))&&(!VF.foto||x.foto_nota>=+VF.foto)&&(!VF.suder||x.suder)&&(!VF.marca||!x.marca_outra));
+  const o={indice:(a,b)=>b.indice-a.indice,foto:(a,b)=>b.foto_nota-a.foto_nota,desc:(a,b)=>(b.desconto??-99)-(a.desconto??-99),
+    novo:(a,b)=>(a.dias_est??99999)-(b.dias_est??99999),pdesc:(a,b)=>b.preco-a.preco,pasc:(a,b)=>a.preco-b.preco}[VF.ordem]||((a,b)=>b.indice-a.indice);
+  return L.sort(o)}
+function vTexto(x){const C=CRM.config||{};
+  const q=x.quartos?`, ${x.quartos} quarto${String(x.quartos)==='1'?'':'s'}`:'';
+  const ed=x.edificio?vTitulo(x.edificio)+'.\n':'';
+  const barato=(x.desconto!=null&&x.desconto>=5&&x.desconto<=35)?'\nPreço abaixo de imóveis parecidos da região.':'';
+  return `${vTitulo(x.tipo)} ${PREP[x.bairro]||'em'} ${x.bairro}, ${x.area} m²${q}.\n${ed}Valor: ${money(x.preco)}.${barato}\nPara conhecer o imóvel, fale comigo: ${C.meu_nome||'[seu nome]'}, ${C.agencia||'Suder Imóveis, da rede Auxiliadora Predial'}.\nCódigo ${x.ref}`}
+function vFone(t){const d=String(t).replace(/\D/g,'').replace(/^55/,'');return d.length===11?`(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`:d.length===10?`(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`:d}
+function vCard(x){
+  const c=x.consultor||{},tel=(c.celular||c.telefone||'').replace(/\D/g,''),wa=tel?`https://wa.me/${tel.startsWith('55')?tel:'55'+tel}`:'';
+  const cor=x.indice>=70?'var(--ok)':x.indice>=55?'#B8860B':'#7a7a7a';
+  const n=x.notas||{};
+  const dica=`Preço ${Math.round(n.preco)} · Fotos ${Math.round(n.foto)} · Liquidez do prédio ${Math.round(n.liquidez)} · Valor do imóvel ${Math.round(n.ticket)} · Tempo no ar ${Math.round(n.tempo)}`;
+  const fotos=(x.fotos||[]).slice(0,3).map(u=>`<img loading="lazy" referrerpolicy="no-referrer" src="${esc(safeUrl(u))}" alt="">`).join('');
+  const idade=x.dias_est!=null?`no ar há cerca de ${x.dias_est} dias (pela data das fotos)`:'idade não estimada';
+  const tags=[x.suder?'<span class="tag prop">Suder</span>':'',x.queda?`<span class="tag queda">baixou ${x.queda.pct}%</span>`:'',
+    x.desconto!=null&&x.desconto>=5?`<span class="tag novo">${Math.round(x.desconto)}% abaixo do mercado</span>`:'',
+    x.desconto!=null&&x.desconto>35?'<span class="tag hoje">preço suspeito, confira</span>':'',
+    x.marca_outra?`<span class="tag est">foto com marca ${esc(x.marca_outra)}</span>`:x.foto_nota>=70?'<span class="tag mad">fotos boas</span>':x.foto_nota<45?'<span class="tag est">fotos fracas</span>':''].filter(Boolean).join('');
+  return `<div class="card">
+   <div class="vfotos">${fotos}</div>
+   <div class="b1">${tags}<span class="score" style="background:${cor}" title="${esc(dica)}">${x.indice}</span></div>
+   <div class="preco">${money(x.preco)}</div>
+   <div class="loc"><b>${esc(x.bairro)}</b>${x.rua?' · '+esc(vTitulo(x.rua))+(x.numero?', '+esc(x.numero):''):''}</div>
+   <div class="det">${esc(vTitulo(x.tipo))} · ${esc(x.area)} m²${x.quartos?' · '+esc(x.quartos)+' qts':''}${x.edificio?' · '+esc(vTitulo(x.edificio)):''}</div>
+   <div class="det">${x.m2?money(x.m2)+'/m²':''}${x.ref_m2?` · parecidos: ${money(x.ref_m2)}/m² (${esc(x.ref_tipo)}, ${x.ref_n} imóveis)`:''}${x.itbi_m2?` · pago no prédio (ITBI): ${money(x.itbi_m2)}/m²`:''}</div>
+   <div class="det">Fotos: nota ${x.foto_nota} (${esc(x.foto_obs)}). ${esc(idade.charAt(0).toUpperCase()+idade.slice(1))}.${x.vendas24!=null?` Prédio: ${x.vendas24} vendas em 24 meses.`:''}</div>
+   <div class="hist">${esc((x.motivos||[]).join(' · '))}</div>
+   <div class="det" style="margin-top:4px"><b>Falar antes com o agenciador:</b> ${esc(c.agencia||'')}${c.nome&&c.nome.replace(/[-\s]/g,'')?' · '+esc(c.nome):''}${tel?' · '+esc(vFone(tel)):''}${c.email?' · '+esc(c.email):''}</div>
+   <div class="acoes">
+     <a class="btn" href="${esc(safeUrl(x.link))}" target="_blank" rel="noopener">Abrir anúncio</a>
+     ${wa?`<a class="btn wpp" href="${esc(wa)}?text=${encodeURIComponent('Olá! Tenho interesse em divulgar o imóvel código '+x.ref+' ('+x.bairro+'). Podemos combinar?')}" target="_blank" rel="noopener">Falar com a agência</a>`:''}
+     <button class="btn pri" data-vcopiar="${esc(x.ref)}">Copiar texto de divulgação</button>
+     <button class="btn" data-vfotos="${esc(x.ref)}">Copiar links das fotos</button>
+   </div></div>`}
+function renderVitrine(){const el=$('#tab-vitrine');
+  if(!VIT||!VIT.itens){el.innerHTML='<div class="panel"><h3>Vitrine Auxiliadora</h3><p class="mut">Os dados ainda não foram publicados. Rode vitrine_aux.py (ou a rotina de portais) para gerar o vitrine.json.</p></div>';return}
+  const L=vLista(),bairros=[...new Set(VIT.itens.map(x=>x.bairro))].sort();
+  const chip=(a,v,t,on)=>`<span class="chip${on?' on':''}" data-${a}="${esc(v)}">${esc(t)}</span>`;
+  el.innerHTML=`<div class="panel"><h3>Vitrine Auxiliadora: imóveis com mais potencial de venda</h3>
+   <p class="mut">Índice de 0 a 100: preço contra imóveis parecidos (35%), qualidade das fotos (30%), vendas recentes no prédio (15%), valor do imóvel (10%) e tempo no ar (10%). A Auxiliadora não informa a data de publicação; a idade é estimada pela data de envio das fotos. Antes de divulgar, fale com o agenciador (nome e contato em cada cartão), como combinado com a Suder.</p>
+   <p class="mut">Atualizada em ${esc(String(VIT.gerado_em).replace('T',' '))} · ${VIT.base_total} imóveis da rede nos 10 bairros · ${VIT.analisados} analisados com fotos · ${L.length} na lista abaixo.</p></div>
+   <div class="box"><div class="chips" style="margin-top:0">${bairros.map(b=>chip('vb',b,b,VF.bairros.includes(b))).join('')}</div>
+   <div class="chips">${VTIPOS.map(([k,t])=>chip('vt',k,t,VF.tipos.includes(k))).join('')}</div>
+   <div class="bar"><label>Fotos <select id="vFoto"><option value="">todas</option><option value="60"${VF.foto==='60'?' selected':''}>nota 60 ou mais</option><option value="75"${VF.foto==='75'?' selected':''}>nota 75 ou mais</option></select></label>
+   <label>Ordenar <select id="vOrdem">${[['indice','Maior potencial'],['foto','Melhores fotos'],['desc','Maior desconto'],['novo','Mais novos'],['pdesc','Maior preço'],['pasc','Menor preço']].map(([k,t])=>`<option value="${k}"${VF.ordem===k?' selected':''}>${t}</option>`).join('')}</select></label>
+   <label class="ck"><input type="checkbox" id="vSuder"${VF.suder?' checked':''}> só da Suder</label>
+   <label class="ck"><input type="checkbox" id="vMarca"${VF.marca?' checked':''}> esconder fotos com marca de outra imobiliária</label></div></div>
+   <div id="vLista" class="grade">${L.slice(0,VF.lim).map(vCard).join('')||'<p class="mut">Nenhum imóvel com esses filtros.</p>'}</div>
+   ${L.length>VF.lim?'<p style="text-align:center"><button class="btn" data-vmais>Mostrar mais</button></p>':''}`}
+function vSalvar(){LS.set('painel_vfiltros',VF);renderVitrine()}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-vb],[data-vt],[data-vmais],[data-vcopiar],[data-vfotos]');if(!t)return;
+  const alterna=(arr,v)=>{const i=arr.indexOf(v);i<0?arr.push(v):arr.splice(i,1)};
+  if(t.dataset.vb!==undefined){alterna(VF.bairros,t.dataset.vb);VF.lim=24;vSalvar();return}
+  if(t.dataset.vt!==undefined){alterna(VF.tipos,t.dataset.vt);VF.lim=24;vSalvar();return}
+  if(t.dataset.vmais!==undefined){VF.lim+=24;vSalvar();return}
+  const x=VIT&&VIT.itens.find(i=>i.ref===(t.dataset.vcopiar||t.dataset.vfotos));if(!x)return;
+  const txt=t.dataset.vcopiar?vTexto(x):(x.fotos||[]).join('\n');
+  navigator.clipboard?.writeText(txt);const orig=t.textContent;t.textContent='copiado';setTimeout(()=>t.textContent=orig,1500)});
+document.addEventListener('change',e=>{if(e.target.id==='vFoto'){VF.foto=e.target.value;VF.lim=24;vSalvar()}
+  if(e.target.id==='vOrdem'){VF.ordem=e.target.value;vSalvar()}if(e.target.id==='vSuder'){VF.suder=e.target.checked;VF.lim=24;vSalvar()}if(e.target.id==='vMarca'){VF.marca=e.target.checked;VF.lim=24;vSalvar()}});
+
 function renderTudo(){montarFiltros();renderLista();const ab=$('nav button.on').dataset.tab;if(ab!=='anuncios')mostrar(ab)}
 function mostrar(tab){$$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));$$('main>section').forEach(s=>s.hidden=s.id!=='tab-'+tab);
-  if(tab==='anuncios')renderLista();if(tab==='predios'){montarFiltrosP();renderPredios()}if(tab==='itbi')renderItbi();if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();if(tab==='guia')renderGuia();window.scrollTo(0,0)}
+  if(tab==='anuncios')renderLista();if(tab==='predios'){montarFiltrosP();renderPredios()}if(tab==='vitrine')renderVitrine();if(tab==='itbi')renderItbi();if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();if(tab==='guia')renderGuia();window.scrollTo(0,0)}
 function irPara(id){F=filtrosPadrao();F.status=[];LS.set('painel_filtros',F);mostrar('anuncios');montarFiltros();
   const a=ADS.find(x=>x.id===id);if(!a)return;abertos.add(id);$('#lista').innerHTML=card(a);$('#contagem').textContent='1 anúncio (toque em Limpar filtros para voltar à lista)';$('#btnMais').hidden=true}
 function irBairro(b){F=filtrosPadrao();F.bairros=[b];F.ordem='score';LS.set('painel_filtros',F);montarFiltros();mostrar('anuncios')}
