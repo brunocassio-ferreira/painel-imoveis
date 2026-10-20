@@ -353,7 +353,7 @@ async function carregar(){
   const ehLocal=['localhost','127.0.0.1'].includes(location.hostname);
   try{
     if(cfg.token&&cfg.owner&&cfg.repo){modo='github';
-      const [d,c,p]=await Promise.all([ghRaw('anuncios.json'),ghCrm(),ghRaw('predios.json').catch(()=>null)]);DATA=d;crmSha=c.sha;CRM=Object.assign(novoCrm(),c.data||{});PRED=p||PRED;ITB=await ghRaw('itbi_cenario.json').catch(()=>null);VIT=await ghRaw('vitrine.json').catch(()=>null);IMB=await ghRaw('imobiliarias.json').catch(()=>null)}
+      const [d,c,p]=await Promise.all([ghRaw('anuncios.json'),ghCrm(),ghRaw('predios.json').catch(e=>{window.PRED_ERRO=String(e.message||e);return null})]);DATA=d;crmSha=c.sha;CRM=Object.assign(novoCrm(),c.data||{});PRED=p||PRED;ITB=await ghRaw('itbi_cenario.json').catch(()=>null);VIT=await ghRaw('vitrine.json').catch(()=>null);IMB=await ghRaw('imobiliarias.json').catch(()=>null)}
     else if(cfg.local||ehLocal){modo='local';
       DATA=await fetch('dados/anuncios.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('sem dados locais');return r.json()});
       PRED=await fetch('dados/predios.json',{cache:'no-store'}).then(r=>r.ok?r.json():PRED).catch(()=>PRED);
@@ -568,6 +568,10 @@ function distM(a,b){const R=6371e3,r=Math.PI/180,dl=(b.lat-a.lat)*r,dg=(b.lng-a.
   const h=Math.sin(dl/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dg/2)**2;return 2*R*Math.asin(Math.sqrt(h))}
 let PL=[];
 function prepararPredios(){
+  if(!window._pfOk){window._pfOk=1;const d=predFiltroPadrao();/* filtro salvo velho nunca deve esconder a lista: busca por texto não persiste e valores inválidos caem */
+    PF.texto='';PF.fases=(PF.fases||[]).filter(f=>FASES.some(x=>x[0]===f));PF.bairros=(PF.bairros||[]).filter(b=>BAIRROS.some(x=>x[0]===b));
+    PF.status=(PF.status||[]).filter(k=>PST.some(x=>x[0]===k));if(!['lista','mapa','ruas'].includes(PF.visao))PF.visao='lista';
+    if(!IJ.some(x=>x[0]===PF.ij))PF.ij=d.ij;LS.set('painel_pfiltros',PF)}
   const ext=Object.values(CRM.predios_extra||{}).filter(x=>!x.removido).map(x=>({...x,fase:'pronto',unidades:[],total:0,fora_rede:0,areas:[],itens:[],manual:true,rua_total:0}));
   PL=[...(PRED.predios||[]),...ext];
   const geo=PL.filter(p=>p.lat&&p.fase!=='obra'&&p.total);
@@ -661,16 +665,19 @@ function abrirRota(){let pts=PL.filter(p=>ROTA.has(p.id)&&p.lat);if(!pts.length)
   if(ord.length>11)alert(`O Google Maps aceita até 11 pontos; abri os 11 primeiros de ${ord.length}.`)}
 function renderPredios(){
   const v=PF.visao;$('#pMapa').hidden=v!=='mapa';$('#pManual').hidden=v==='ruas';
-  if(!PL.length&&!(PRED.predios||[]).length){$('#pContagem').textContent='';$('#pLista').innerHTML='<p class="mut">Lista de prédios ainda não gerada. Ela é atualizada na rotina diária dos portais.</p>';return}
+  if(!PL.length&&!(PRED.predios||[]).length){$('#pContagem').textContent='';$('#pLista').innerHTML='<p class="mut">'+(window.PRED_ERRO?'Não consegui carregar a lista de prédios ('+esc(window.PRED_ERRO)+'). Confira o token em Configurações e recarregue a página.':'Lista de prédios ainda não gerada. Ela é atualizada na rotina diária dos portais.')+'</p>';return}
   if(v==='ruas'){const r=(PRED.ruas||[]).filter(x=>!PF.bairros.length||PF.bairros.includes(x.bairro));
     $('#pContagem').textContent=`${r.length} ruas com mais anúncios`;$('#pMais').hidden=$('#pRota').hidden=$('#pLimparRota').hidden=true;
     $('#pLista').innerHTML=`<div class="panel scroll"><table><tr><th>Rua</th><th>Bairro</th><th>Anúncios</th><th>Fora da rede</th><th>Em obra</th><th>Prédios mapeados</th><th>Sites</th></tr>
      ${r.map(x=>`<tr><td><a class="lk" data-prua="${esc(x.rua)}">${esc(x.rua)}</a></td><td>${esc(x.bairro)}</td><td><b>${x.total}</b></td><td>${x.fora_rede}</td><td>${x.obra||''}</td><td>${x.predios||''}</td><td class="mut">${esc(Object.entries(x.fontes).sort((a,b)=>b[1]-a[1]).map(([f,n])=>f+' '+n).join(', '))}</td></tr>`).join('')}</table>
      <p class="mut">Conta todos os anúncios com rua informada, de todos os sites, inclusive os da rede. Rua cheia de anúncio é rua com giro: vale percorrer a pé atrás de placas e portarias. Toque no nome para ver os anúncios dela.</p></div>`;return}
   const r=filtrarPredios();$('#pContagem').textContent=`${r.length} prédios · ${r.reduce((s,p)=>s+p.total,0)} unidades à venda · ${r.reduce((s,p)=>s+iv(p),0)} vendas pelo ITBI (${(IJ.find(x=>x[0]===(PF.ij||'v365'))||[])[1]})`+(PRED.gerado_em?` · anúncios de ${br(PRED.gerado_em.slice(0,10))}`:'')+(PRED.itbi&&PRED.itbi.pagamentos_ate?` · ITBI pago até ${br(PRED.itbi.pagamentos_ate)} (a prefeitura publica em blocos, última publicação ${br(PRED.itbi.publicado_pela_prefeitura)})`:'');
+  const ativos=[PF.texto.trim()&&'busca "'+PF.texto.trim()+'"',PF.bairros.length&&PF.bairros.length+' bairro(s)',PF.status.length&&'visita',PF.im&&'mínimo ITBI'].filter(Boolean);
+  $('#pContagem').innerHTML=esc($('#pContagem').textContent)+(ativos.length?` · <b>filtros: ${esc(ativos.join(', '))}</b> <a class="lk" id="pReset2">limpar</a>`:'');
+  const r2=$('#pReset2');if(r2)r2.onclick=()=>{PF=predFiltroPadrao();LS.set('painel_pfiltros',PF);$('#pTexto').value='';montarFiltrosP();renderPredios()};
   if(v==='mapa'){$('#pLista').innerHTML='';$('#pMais').hidden=true;renderMapaPredios(r);return}
   $('#pLista').innerHTML=`<div class="grade">${r.slice(0,plimite).map(cardPredio).join('')}</div>`;
-  if(!r.length)$('#pLista').innerHTML='<p class="mut">Nenhum prédio com esses filtros.</p>';
+  if(!r.length)$('#pLista').innerHTML='<p class="mut">Nenhum prédio com esses filtros. <a class="lk" id="pReset">Limpar filtros</a></p>';const rs=$('#pReset');if(rs)rs.onclick=()=>{PF=predFiltroPadrao();LS.set('painel_pfiltros',PF);$('#pTexto').value='';montarFiltrosP();renderPredios()};
   $('#pMais').hidden=r.length<=plimite;atualizarRota()}
 function renderMapaPredios(r){
   if(!window.L){$('#pMapa').innerHTML='<p class="mut" style="padding:12px">Mapa indisponível sem internet.</p>';return}
