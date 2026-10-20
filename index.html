@@ -105,6 +105,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
     <button data-tab="anuncios" class="on">Anúncios</button>
     <button data-tab="predios">Prédios</button>
     <button data-tab="vitrine">Vitrine</button>
+    <button data-tab="imobiliarias">Imobiliárias</button>
     <button data-tab="itbi">ITBI</button>
     <button data-tab="funil">Funil</button>
     <button data-tab="mapa">Mapa</button>
@@ -187,6 +188,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
     <div class="bar"><button class="btn" id="pMais" hidden>Mostrar mais</button></div>
   </section>
   <section id="tab-vitrine" hidden></section>
+  <section id="tab-imobiliarias" hidden></section>
   <section id="tab-itbi" hidden></section>
   <section id="tab-funil" hidden></section>
   <section id="tab-mapa" hidden>
@@ -351,12 +353,13 @@ async function carregar(){
   const ehLocal=['localhost','127.0.0.1'].includes(location.hostname);
   try{
     if(cfg.token&&cfg.owner&&cfg.repo){modo='github';
-      const [d,c,p]=await Promise.all([ghRaw('anuncios.json'),ghCrm(),ghRaw('predios.json').catch(()=>null)]);DATA=d;crmSha=c.sha;CRM=Object.assign(novoCrm(),c.data||{});PRED=p||PRED;ITB=await ghRaw('itbi_cenario.json').catch(()=>null);VIT=await ghRaw('vitrine.json').catch(()=>null)}
+      const [d,c,p]=await Promise.all([ghRaw('anuncios.json'),ghCrm(),ghRaw('predios.json').catch(()=>null)]);DATA=d;crmSha=c.sha;CRM=Object.assign(novoCrm(),c.data||{});PRED=p||PRED;ITB=await ghRaw('itbi_cenario.json').catch(()=>null);VIT=await ghRaw('vitrine.json').catch(()=>null);IMB=await ghRaw('imobiliarias.json').catch(()=>null)}
     else if(cfg.local||ehLocal){modo='local';
       DATA=await fetch('dados/anuncios.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('sem dados locais');return r.json()});
       PRED=await fetch('dados/predios.json',{cache:'no-store'}).then(r=>r.ok?r.json():PRED).catch(()=>PRED);
       ITB=await fetch('dados/itbi_cenario.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
       VIT=await fetch('dados/vitrine.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
+      IMB=await fetch('dados/imobiliarias.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
       CRM=Object.assign(novoCrm(),LS.get('painel_crm_local',{}))}
     else{abrirSetup('Conecte o repositório para ver os dados.');return}
   }catch(e){$('#info').textContent='erro: '+e.message;abrirSetup('Não consegui ler os dados: '+e.message);return}
@@ -1031,9 +1034,49 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-vb],[data-
 document.addEventListener('change',e=>{if(e.target.id==='vFoto'){VF.foto=e.target.value;VF.lim=24;vSalvar()}
   if(e.target.id==='vOrdem'){VF.ordem=e.target.value;vSalvar()}if(e.target.id==='vSuder'){VF.suder=e.target.checked;VF.lim=24;vSalvar()}if(e.target.id==='vMarca'){VF.marca=e.target.checked;VF.lim=24;vSalvar()}});
 
+/* ---------- Guia de imobiliárias pequenas ---------- */
+let IMB=null, IMF=Object.assign({prio:[],texto:'',visitada:''},LS.get('painel_imfiltros',{})), IMV=LS.get('painel_imvisitas',{});
+function imFone(t){const d=String(t||'').replace(/\D/g,'').replace(/^55/,'');return d.length===11?`(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`:d.length===10?`(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`:String(t||'')}
+function imLista(){
+  if(!IMB||!IMB.itens)return [];
+  const t=(IMF.texto||'').toLowerCase().trim();
+  return IMB.itens.filter(x=>(!IMF.prio.length||IMF.prio.includes(x.prioridade))&&(!t||`${x.nome} ${x.bairro} ${x.site}`.toLowerCase().includes(t))
+    &&(!IMF.visitada||(IMF.visitada==='hoje'?IMV[x.site]===HOJE_ISO:IMV[x.site]!==HOJE_ISO)))}
+function imCard(x){
+  const wa=x.wa?`https://wa.me/55${String(x.wa).replace(/\D/g,'').replace(/^55/,'')}`:'';
+  const ig=x.ig?`https://www.instagram.com/${String(x.ig).replace(/^@/,'')}/`:'';
+  const v=IMV[x.site];
+  return `<div class="card">
+   <div class="b1"><span class="tag ${x.prioridade==='P1'?'novo':x.prioridade==='P2'?'rad':'est'}">${esc(x.prioridade==='Extra'?'indicada':x.prioridade)}</span>${v===HOJE_ISO?'<span class="tag mad">olhada hoje</span>':v?`<span class="tag est">olhada em ${esc(v.slice(8)+'/'+v.slice(5,7))}</span>`:''}</div>
+   <div class="preco" style="font-size:16px">${esc(x.nome)}</div>
+   <div class="det">${x.bairro?esc(x.bairro)+' · ':''}${x.creci?'CRECI '+esc(x.creci)+' · ':''}${x.aval?x.aval+' avaliações no Maps':''}</div>
+   ${x.tel?`<div class="det">${esc(imFone(x.tel))}</div>`:''}
+   ${x.obs?`<div class="hist">${esc(x.obs)}</div>`:''}
+   <div class="acoes">
+     <a class="btn pri" href="${esc(safeUrl(x.venda||x.site))}" target="_blank" rel="noopener" data-imv="${esc(x.site)}">Imóveis à venda</a>
+     <a class="btn" href="${esc(safeUrl(x.site))}" target="_blank" rel="noopener">Site</a>
+     ${wa?`<a class="btn wpp" href="${esc(wa)}" target="_blank" rel="noopener">WhatsApp</a>`:''}
+     ${ig?`<a class="btn" href="${esc(ig)}" target="_blank" rel="noopener">Instagram</a>`:''}
+   </div></div>`}
+function renderImobiliarias(){const el=$('#tab-imobiliarias');
+  if(!IMB||!IMB.itens){el.innerHTML='<div class="panel"><h3>Imobiliárias</h3><p class="mut">A guia ainda não foi publicada. Rode gerar_guia_imobiliarias.py.</p></div>';return}
+  const L=imLista(),chip=(a,v,t,on)=>`<span class="chip${on?' on':''}" data-${a}="${esc(v)}">${esc(t)}</span>`;
+  el.innerHTML=`<div class="panel"><h3>Imobiliárias pequenas com portfólio próprio</h3>
+   <p class="mut">Links para você olhar o que cada uma anuncia hoje. Não há coleta automática: o painel só guia o caminho. P1 são as de maior estoque acima de R$ 500 mil nos bairros que mapeamos fora do painel (levantamento de 19/10/2026), P2 e P3 vêm depois. Abrir "Imóveis à venda" marca a imobiliária como olhada hoje, neste aparelho.</p></div>
+   <div class="box"><input id="imTexto" placeholder="Buscar por nome ou bairro" value="${esc(IMF.texto)}" style="width:100%">
+   <div class="chips">${['P1','P2','P3','Extra'].map(p=>chip('imp',p,p==='Extra'?'indicadas':p,IMF.prio.includes(p))).join('')}${chip('imvis','nao','ainda não olhadas hoje',IMF.visitada==='nao')}${chip('imvis','hoje','olhadas hoje',IMF.visitada==='hoje')}</div>
+   <p class="mut" style="margin:8px 0 0">${L.length} de ${IMB.itens.length} imobiliárias</p></div>
+   <div class="grade">${L.map(imCard).join('')||'<p class="mut">Nenhuma imobiliária com esses filtros.</p>'}</div>`}
+function imSalvar(){LS.set('painel_imfiltros',IMF);renderImobiliarias()}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-imp],[data-imvis],[data-imv]');if(!t)return;
+  if(t.dataset.imv!==undefined){IMV[t.dataset.imv]=HOJE_ISO;LS.set('painel_imvisitas',IMV);setTimeout(renderImobiliarias,300);return}
+  if(t.dataset.imp!==undefined){const i=IMF.prio.indexOf(t.dataset.imp);i<0?IMF.prio.push(t.dataset.imp):IMF.prio.splice(i,1);imSalvar();return}
+  if(t.dataset.imvis!==undefined){IMF.visitada=IMF.visitada===t.dataset.imvis?'':t.dataset.imvis;imSalvar()}});
+document.addEventListener('input',e=>{if(e.target.id==='imTexto'){IMF.texto=e.target.value;LS.set('painel_imfiltros',IMF);clearTimeout(window._imt);window._imt=setTimeout(()=>{renderImobiliarias();const i=$('#imTexto');i.focus();i.setSelectionRange(i.value.length,i.value.length)},250)}});
+
 function renderTudo(){montarFiltros();renderLista();const ab=$('nav button.on').dataset.tab;if(ab!=='anuncios')mostrar(ab)}
 function mostrar(tab){$$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));$$('main>section').forEach(s=>s.hidden=s.id!=='tab-'+tab);
-  if(tab==='anuncios')renderLista();if(tab==='predios'){montarFiltrosP();renderPredios()}if(tab==='vitrine')renderVitrine();if(tab==='itbi')renderItbi();if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();if(tab==='guia')renderGuia();window.scrollTo(0,0)}
+  if(tab==='anuncios')renderLista();if(tab==='predios'){montarFiltrosP();renderPredios()}if(tab==='vitrine')renderVitrine();if(tab==='imobiliarias')renderImobiliarias();if(tab==='itbi')renderItbi();if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();if(tab==='guia')renderGuia();window.scrollTo(0,0)}
 function irPara(id){F=filtrosPadrao();F.status=[];LS.set('painel_filtros',F);mostrar('anuncios');montarFiltros();
   const a=ADS.find(x=>x.id===id);if(!a)return;abertos.add(id);$('#lista').innerHTML=card(a);$('#contagem').textContent='1 anúncio (toque em Limpar filtros para voltar à lista)';$('#btnMais').hidden=true}
 function irBairro(b){F=filtrosPadrao();F.bairros=[b];F.ordem='score';LS.set('painel_filtros',F);montarFiltros();mostrar('anuncios')}
