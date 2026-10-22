@@ -301,7 +301,7 @@ const RESPOSTAS=[
 let cfg=LS.get('painel_cfg',{}), modo='', DATA={anuncios:[],gerado_em:''}, CRM=novoCrm(), crmSha=null;
 let ITB=null, IFI=Object.assign({per:'365',tipos:['Apartamento','Cobertura','Flat','Casa','Casa em condomínio'],escopo:'alvo',ord:'n',lim:40},LS.get('painel_ifiltros',{}));
 let PRED={predios:[],ruas:[],gerado_em:''}, PF=Object.assign(predFiltroPadrao(),LS.get('painel_pfiltros',{})), plimite=30, pmapa=null, pcamadas=null, ROTA=new Set(LS.get('painel_rota',[]));
-let ADS=[], MED={}, F=normF(LS.get('painel_filtros',null)), OPC={fonte:[],tipo:[]}, limite=40, mapa=null, camadas=null, wppId=null;
+let ADS=[], NIMOV=0, MED={}, F=normF(LS.get('painel_filtros',null)), OPC={fonte:[],tipo:[]}, limite=40, mapa=null, camadas=null, wppId=null;
 const HOJE=new Date(), HOJE_ISO=isoLocal(HOJE);
 
 function novoCrm(){return {leads:{},extras:{},predios:{},predios_extra:{},config:{},modelos:null}}
@@ -398,6 +398,10 @@ function conferidoAte(){return (CRM.config&&CRM.config.conferido_ate)||LS.get('p
 function marcarConferido(){const g=(DATA.gerado_em||'').replace('T',' ').slice(0,16)||HOJE_ISO+' 23:59';
   CRM.config=CRM.config||{};CRM.config.conferido_ate=g;LS.set('painel_conferido_ate',g);salvar();preparar();montarFiltros();renderLista()}
 function lead(id){return CRM.leads[id]||{status:'novo'}}
+// anuncio do grupo que guarda o seu CRM (status, nome, nota); sem CRM em nenhum, o proprio anuncio
+// imoveis (nao anuncios) que entraram depois da ultima conferencia e nao foram descartados nem agenciados
+const contarNovos=()=>new Set(ADS.filter(a=>a.conferir&&!['descartado','agenciado'].includes(lead(comLead(a).id).status)).map(a=>a.gid)).size;
+function comLead(a){const c=(a.grupo||[a]).filter(o=>CRM.leads[o.id]);return c.find(o=>CRM.leads[o.id].status!=='novo')||c[0]||a}
 function leadMut(id){return CRM.leads[id]||(CRM.leads[id]={status:'novo',hist:[]})}
 function preparar(){
   const extras=Object.values(CRM.extras||{}).filter(x=>!x.removido);
@@ -411,8 +415,15 @@ function preparar(){
   for(const a of ADS)a.maduro=a.proprietario&&!!a.publicado&&a.idade>=MADURO&&dias(a.ultima||a.visto)<=14;
   MED={};for(const [b] of BAIRROS)MED[b]=mediana(ADS.filter(a=>a.bairro===b&&a.pm2).map(a=>a.pm2));
   const nomes=Object.fromEntries(ADS.map(a=>[a.id,a.fonte]));
-  const porId=Object.fromEntries(ADS.map(a=>[a.id,a]));
-  for(const a of ADS){a.outrosNomes=[...new Set(a.outros.map(i=>nomes[i]).filter(Boolean))];a.outrosAds=a.outros.map(i=>porId[i]).filter(Boolean);[a.score,a.motivos]=pontuar(a)}
+  // mesmo imovel em varios sites vira um grupo (ligacoes encadeadas: A=B e B=C juntam A, B e C); a lista mostra um card por imovel
+  const pai=Object.fromEntries(ADS.map(a=>[a.id,a.id])),raiz=i=>{while(pai[i]!==i){pai[i]=pai[pai[i]];i=pai[i]}return i};
+  for(const a of ADS)for(const o of a.outros)if(o in pai)pai[raiz(o)]=raiz(a.id);
+  const G={};for(const a of ADS){a.gid=raiz(a.id);(G[a.gid]=G[a.gid]||[]).push(a)}
+  NIMOV=Object.keys(G).length;
+  for(const a of ADS){a.grupo=G[a.gid];a.outrosAds=a.grupo.filter(o=>o!==a);a.outros=a.outrosAds.map(o=>o.id);a.outrosNomes=[...new Set(a.outrosAds.map(o=>nomes[o.id]))]}
+  // imovel que voce ja tinha visto em outro site nao e novidade; o anuncio novo fica so com o aviso de site novo
+  for(const m of Object.values(G))if(m.length>1&&m.some(o=>o.base_inicial||o.entrada<=ca))for(const o of m)if(o.conferir){o.conferir=false;o.novoSite=true}
+  for(const a of ADS)[a.score,a.motivos]=pontuar(a)
   $('#info').textContent=`${DATA.anuncios.length} anúncios · dados de ${DATA.gerado_em?DATA.gerado_em.replace('T',' ').slice(0,16).split(' ').map((p,i)=>i?p:br(p)).join(' '):'?'} · ${modo==='github'?'GitHub privado':'só neste aparelho'}`;
   OPC.fonte=[...new Set(ADS.map(a=>a.fonte))].sort();
   OPC.tipo=[...new Set(ADS.map(a=>a.tipo||'não informado'))].sort();
@@ -450,7 +461,7 @@ function montarFiltros(){
   grupo('fTipo','Tipo','tipo',OPC.tipo.map(t=>[t,t]));
   grupo('fQts','Quartos','qts',[['1','1'],['2','2'],['3','3'],['4','4 ou mais']]);
   $('#fPreco').innerHTML='<b class="lbl">Preço</b>'+FAIXAS.map(([mn,mx,t])=>`<span class="chip${String(F.pmin)===mn&&String(F.pmax)===mx?' on':''}" data-band="${mn}|${mx}">${t}</span>`).join('');
-  const nConf=ADS.filter(a=>a.conferir&&!['descartado','agenciado'].includes(lead(a.id).status)).length;
+  const nConf=contarNovos();
   $('#fAtalhos').innerHTML=ATALHOS.map(([id,t,on])=>`<span class="chip${on(F)?' on':''}" data-at="${id}">${id==='novos'?`${t} (${nConf})`:t}</span>`).join('');
   const levs=[...new Set(ADS.map(a=>a.levantamento).filter(Boolean))].sort().reverse().slice(0,15);
   if(F.lev&&!levs.includes(F.lev))levs.push(F.lev);
@@ -472,7 +483,7 @@ const LEVT={leve:'leve',completa:'completa',monitor:'monitor',avulso:'avulso'};
 function levRot(l,tipo){if(!l)return '';const [d,h]=l.split(' ');return `${d===HOJE_ISO?'hoje':br(d)} ${h}${tipo?' · '+(LEVT[tipo]||tipo):''}`}
 function filtrar(){
   const t=F.texto.trim().toLowerCase();
-  let r=ADS.filter(a=>{const L=lead(a.id);
+  let r=ADS.filter(a=>{const L=lead(comLead(a).id);
     if(F.periodo!==''&&(a.estoque||a.idade>+F.periodo))return false;
     if(F.origem==='conf'&&!a.conf)return false;
     if(F.origem==='radar'&&!a.radar)return false;
@@ -501,10 +512,13 @@ function filtrar(){
     pdesc:(a,b)=>b.preco-a.preco,pasc:(a,b)=>a.preco-b.preco,m2asc:(a,b)=>(a.pm2||1e9)-(b.pm2||1e9),m2desc:(a,b)=>b.pm2-a.pm2}[F.ordem]||(()=>0);
   return r.sort(ord)}
 function renderLista(){
-  const r=filtrar(),P=filtrosPadrao();const ativos=Object.keys(P).filter(k=>k!=='ordem'&&JSON.stringify(F[k])!==JSON.stringify(P[k])).length;
+  const todos=filtrar(),P=filtrosPadrao();const ativos=Object.keys(P).filter(k=>k!=='ordem'&&JSON.stringify(F[k])!==JSON.stringify(P[k])).length;
+  // um card por imovel: fica a posicao do melhor anuncio do grupo, com o anuncio que guarda o seu CRM quando houver
+  const porG={},r=[];for(const a of todos)(porG[a.gid]=porG[a.gid]||[]).push(a);
+  for(const a of todos){const m=porG[a.gid];if(!m)continue;delete porG[a.gid];r.push(m.find(o=>CRM.leads[o.id])||a)}
   $('#resumoF').textContent=ativos?`(${ativos} ativos)`:'';
-  const nConf=ADS.filter(a=>a.conferir&&!['descartado','agenciado'].includes(lead(a.id).status)).length;
-  $('#contagem').innerHTML=`${r.length} de ${ADS.length} anúncios`+(nConf?` · <a href="#" id="lnkNovos" style="color:#d62828;font-weight:700">${nConf} novos para conferir</a> <button class="btn" id="btnConferi" title="Tudo que entrou no radar até agora deixa de aparecer como novo">Marquei como conferidos</button>`:` · nada novo desde ${esc(levRot(conferidoAte()))}`);
+  const nConf=contarNovos();
+  $('#contagem').innerHTML=`${r.length} de ${NIMOV} imóveis`+(todos.length>r.length?` (${todos.length} anúncios; os repetidos em outros sites ficam dentro do card)`:'')+(nConf?` · <a href="#" id="lnkNovos" style="color:#d62828;font-weight:700">${nConf} novos para conferir</a> <button class="btn" id="btnConferi" title="Tudo que entrou no radar até agora deixa de aparecer como novo">Marquei como conferidos</button>`:` · nada novo desde ${esc(levRot(conferidoAte()))}`);
   $('#btnLimpar2').hidden=!ativos;
   if(nConf){$('#lnkNovos').onclick=e=>{e.preventDefault();F={...filtrosPadrao(),novos:true};LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};$('#btnConferi').onclick=marcarConferido}
   $('#lista').innerHTML=r.slice(0,limite).map(card).join('')||'<p class="mut">Nenhum anúncio com esses filtros.</p>';
@@ -519,6 +533,7 @@ function card(a){const L=lead(a.id);const tags=[];
   else if(a.radar&&a.idade<=3)tags.push('<span class="tag rad">detectado · sem data</span>');
   if(a.proprietario)tags.push('<span class="tag prop">proprietário</span>');
   if(a.outros.length)tags.push(`<span class="tag multi">${a.outros.length+1} sites</span>`);
+  const ns=(a.grupo||[]).filter(o=>o.novoSite);if(ns.length)tags.push(`<span class="tag rad" title="Imóvel que você já tinha no radar, agora anunciado também neste site">apareceu também em ${esc([...new Set(ns.map(o=>o.fonte))].join(', '))}</span>`);
   if(a.possivel_rede){const pr=a.possivel_rede;tags.push(`<a class="tag multi" href="${esc(safeUrl(pr.link))}" target="_blank" rel="noopener" title="Mesma rua, área e quartos, preço diferente. Pode ser o mesmo imóvel com preço ajustado, confira antes de abordar.">possível na rede: ${esc(pr.fonte)} ${money(pr.preco)} ↗</a>`)}
   if(a.preco<a.preco_inicial)tags.push('<span class="tag queda">baixou</span>');
   if(a.maduro)tags.push(`<span class="tag mad">${a.idade} dias no ar</span>`);
