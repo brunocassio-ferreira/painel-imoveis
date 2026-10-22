@@ -53,7 +53,7 @@ details.mais summary{cursor:pointer;font-weight:600;color:var(--acc)}
 .b1{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .tag{font-size:11px;padding:2px 7px;border-radius:10px;background:var(--chip);color:var(--tx);font-weight:600}
 .tag.hoje{background:#d62828;color:#fff}.tag.novo{background:#D9CCFF;color:#0F0A1A}.tag.prop{background:var(--ok);color:#fff}
-.tag.multi{background:var(--blue);color:#fff}.tag.mad{background:#0F6E7A;color:#fff}.tag.queda{background:#9B2C7C;color:#fff}.tag.rad{background:#E3DCFA;color:#2B2148;font-weight:600}.tag.est{background:var(--chip);color:var(--mut);font-weight:400}
+.tag.multi{background:var(--blue);color:#fff}.tag.lanc{background:#B8860B;color:#fff}.tag.mad{background:#0F6E7A;color:#fff}.tag.queda{background:#9B2C7C;color:#fff}.tag.rad{background:#E3DCFA;color:#2B2148;font-weight:600}.tag.est{background:var(--chip);color:var(--mut);font-weight:400}
 .score{margin-left:auto;font-weight:700;font-size:13px;border-radius:12px;padding:2px 8px;color:#fff;cursor:help}
 .preco{font-size:19px;font-weight:700}.preco s{font-size:13px;color:var(--mut);font-weight:400;margin-left:6px}
 .det,.datas{color:var(--mut);font-size:13px}.igual{font-size:13px;color:var(--mut);margin:2px 0}.igual a{display:inline-block;margin:2px 6px 2px 0;word-break:break-word}.loc{font-size:14px}
@@ -305,7 +305,7 @@ let ADS=[], NIMOV=0, MED={}, F=normF(LS.get('painel_filtros',null)), OPC={fonte:
 const HOJE=new Date(), HOJE_ISO=isoLocal(HOJE);
 
 function novoCrm(){return {leads:{},extras:{},predios:{},predios_extra:{},config:{},modelos:null}}
-function filtrosPadrao(){return {periodo:'',origem:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:['ativos'],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',lev:'',multi:false,queda:false,follow:false,semBase:false,maduro:false,janela:true,novos:false}}
+function filtrosPadrao(){return {periodo:'',origem:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:['ativos'],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',lev:'',multi:false,queda:false,follow:false,semBase:false,maduro:false,janela:true,novos:false,lanc:false}}
 // filtros salvos antes da escolha multipla guardavam texto simples em site, tipo, status e quartos
 function normF(f){f={...filtrosPadrao(),...(f||{})};for(const k of ['bairros','fonte','tipo','status','qts'])if(!Array.isArray(f[k]))f[k]=f[k]?[f[k]]:[];return f}
 function isoLocal(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`}
@@ -420,6 +420,10 @@ function preparar(){
   for(const a of ADS)for(const o of a.outros)if(o in pai)pai[raiz(o)]=raiz(a.id);
   const G={};for(const a of ADS){a.gid=raiz(a.id);(G[a.gid]=G[a.gid]||[]).push(a)}
   NIMOV=Object.keys(G).length;
+  // varias unidades iguais no mesmo site de imobiliaria = lancamento ou bloco de unidades; na ZAP/OLX o normal e o mesmo imovel com varios corretores
+  for(const m of Object.values(G)){if(m.length<2)continue;const pf={};for(const o of m)pf[o.fonte]=(pf[o.fonte]||0)+1;
+    const un=Math.max(0,...Object.entries(pf).filter(([f])=>!/^(ZAP|OLX)/.test(f)).map(([,n])=>n)),corr=pf.ZAP||0;
+    for(const o of m){o.unidades=un>1?un:0;o.corretoresZap=corr>1?corr:0}}
   for(const a of ADS){a.grupo=G[a.gid];a.outrosAds=a.grupo.filter(o=>o!==a);a.outros=a.outrosAds.map(o=>o.id);a.outrosNomes=[...new Set(a.outrosAds.map(o=>nomes[o.id]))]}
   // imovel que voce ja tinha visto em outro site nao e novidade; o anuncio novo fica so com o aviso de site novo
   for(const m of Object.values(G))if(m.length>1&&m.some(o=>o.base_inicial||o.entrada<=ca))for(const o of m)if(o.conferir){o.conferir=false;o.novoSite=true}
@@ -449,9 +453,9 @@ function grupo(id,rot,k,ops){$('#'+id).innerHTML=`<b class="lbl">${rot}</b>`+ops
 const FAIXAS=[['','','Qualquer'],['500','800','500 a 800 mil'],['800','1500','800 mil a 1,5 mi'],['1500','3000','1,5 a 3 mi'],['3000','','Acima de 3 mi']];
 // atalhos de um toque: os recortes mais usados na rotina de agenciamento
 const ATALHOS=[['novos','Novos para conferir',f=>f.novos],['hoje','Publicados hoje (data confirmada)',f=>f.periodo==='0'&&f.origem==='conf'],['radar','Detectados hoje (sem data)',f=>f.periodo==='0'&&f.origem==='radar'],['prop','Proprietário direto',f=>f.anunc==='prop'],['maduro','Dono há 45+ dias no ar',f=>f.maduro],
-  ['queda','Baixou o preço',f=>f.queda],['multi','Em 2+ sites',f=>f.multi],['follow','Follow-up vencido',f=>f.follow]];
+  ['queda','Baixou o preço',f=>f.queda],['multi','Em 2+ sites',f=>f.multi],['lanc','Lançamentos',f=>f.lanc],['follow','Follow-up vencido',f=>f.follow]];
 function atalho(id){const A={novos:()=>F.novos=!F.novos,hoje:()=>{const on=F.periodo==='0'&&F.origem==='conf';F.periodo=on?'':'0';F.origem=on?'':'conf'},radar:()=>{const on=F.periodo==='0'&&F.origem==='radar';F.periodo=on?'':'0';F.origem=on?'':'radar'},prop:()=>F.anunc=F.anunc==='prop'?'':'prop',maduro:()=>F.maduro=!F.maduro,
-  queda:()=>F.queda=!F.queda,multi:()=>F.multi=!F.multi,follow:()=>F.follow=!F.follow};A[id]();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()}
+  queda:()=>F.queda=!F.queda,multi:()=>F.multi=!F.multi,lanc:()=>F.lanc=!F.lanc,follow:()=>F.follow=!F.follow};A[id]();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()}
 function montarFiltros(){
   $('#fPeriodo').innerHTML='<b class="lbl">Período</b>'+PERIODOS.map(([v,t])=>`<span class="chip${F.periodo===v?' on':''}" data-p="${v}">${t}</span>`).join('');
   $('#fOrigem').innerHTML='<b class="lbl">Data</b>'+ORIGENS.map(([v,t])=>`<span class="chip${F.origem===v?' on':''}" data-o="${v}">${t}</span>`).join('');
@@ -488,7 +492,7 @@ function filtrar(){
     if(F.origem==='conf'&&!a.conf)return false;
     if(F.origem==='radar'&&!a.radar)return false;
     if(F.semBase&&a.estoque)return false;
-    if(F.janela&&!F.maduro&&!F.novos&&!a.novoRadar&&(a.estoque||a.idade>JANELA))return false;
+    if(F.janela&&!F.maduro&&!F.novos&&!F.lanc&&!a.novoRadar&&(a.estoque||a.idade>JANELA))return false;
     if(F.novos&&!a.conferir)return false;
     if(F.maduro&&!a.maduro)return false;
     if(F.bairros.length&&!F.bairros.includes(a.bairro))return false;
@@ -503,6 +507,7 @@ function filtrar(){
     if(F.amax&&(!a.m2||a.m2>+F.amax))return false;
     if(F.qts.length&&!F.qts.some(q=>q==='4'?+a.quartos>=4:String(a.quartos)===q))return false;
     if(F.multi&&!a.outros.length)return false;
+    if(F.lanc&&!a.unidades)return false;
     if(F.queda&&!(a.preco<a.preco_inicial))return false;
     if(F.follow&&!(L.followup&&L.followup<=HOJE_ISO&&!['descartado','agenciado'].includes(L.status)))return false;
     if(F.lev&&a.levantamento!==F.lev)return false;
@@ -533,6 +538,8 @@ function card(a){const L=lead(a.id);const tags=[];
   else if(a.radar&&a.idade<=3)tags.push('<span class="tag rad">detectado · sem data</span>');
   if(a.proprietario)tags.push('<span class="tag prop">proprietário</span>');
   if(a.outros.length)tags.push(`<span class="tag multi">${a.outros.length+1} sites</span>`);
+  if(a.unidades)tags.push(`<span class="tag lanc" title="A mesma imobiliária anuncia ${a.unidades} unidades com preço e metragem iguais: costuma ser lançamento ou prédio novo com várias unidades à venda. Abra Anúncio ▾ para ver todas.">LANÇAMENTO? ${a.unidades} unidades iguais</span>`);
+  else if(a.corretoresZap)tags.push(`<span class="tag multi" title="O mesmo imóvel anunciado por ${a.corretoresZap} corretores diferentes na ZAP">${a.corretoresZap} corretores na ZAP</span>`);
   const ns=(a.grupo||[]).filter(o=>o.novoSite);if(ns.length)tags.push(`<span class="tag rad" title="Imóvel que você já tinha no radar, agora anunciado também neste site">apareceu também em ${esc([...new Set(ns.map(o=>o.fonte))].join(', '))}</span>`);
   if(a.possivel_rede){const pr=a.possivel_rede;tags.push(`<a class="tag multi" href="${esc(safeUrl(pr.link))}" target="_blank" rel="noopener" title="Mesma rua, área e quartos, preço diferente. Pode ser o mesmo imóvel com preço ajustado, confira antes de abordar.">possível na rede: ${esc(pr.fonte)} ${money(pr.preco)} ↗</a>`)}
   if(a.preco<a.preco_inicial)tags.push('<span class="tag queda">baixou</span>');
