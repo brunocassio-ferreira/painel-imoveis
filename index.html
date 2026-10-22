@@ -323,10 +323,21 @@ const API=p=>`https://api.github.com/repos/${encodeURIComponent(cfg.owner)}/${en
 const H=acc=>({Authorization:'Bearer '+cfg.token,Accept:acc,'X-GitHub-Api-Version':'2022-11-28'});
 function b64dec(s){const bin=atob(s.replace(/\n/g,''));return new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0)))}
 function b64enc(str){const b=new TextEncoder().encode(str);let s='';for(let i=0;i<b.length;i+=0x8000)s+=String.fromCharCode.apply(null,b.subarray(i,i+0x8000));return btoa(s)}
-async function ghRaw(p){const r=await fetch(API(p),{headers:H('application/vnd.github.raw+json'),cache:'no-store'});if(!r.ok)throw new Error(`${p}: HTTP ${r.status}`);return r.json()}
 async function ghCrm(){const r=await fetch(API('crm.json'),{headers:H('application/vnd.github+json'),cache:'no-store'});
   if(r.status===404)return {sha:null,data:null};if(!r.ok)throw new Error(`crm.json: HTTP ${r.status}`);
   const j=await r.json();return {sha:j.sha,data:JSON.parse(b64dec(j.content))}}
+// copia dos dados guardada no aparelho (IndexedDB): abre na hora com a ultima versao e so baixa de novo o que mudou (ETag)
+const IDB={db:null,
+  abrir(){return this.db||(this.db=new Promise((ok,er)=>{const q=indexedDB.open('painel_cache',1);q.onupgradeneeded=()=>q.result.createObjectStore('arq');q.onsuccess=()=>ok(q.result);q.onerror=()=>er(q.error)}))},
+  async ler(n){try{const db=await this.abrir();return await new Promise(ok=>{const q=db.transaction('arq').objectStore('arq').get(n);q.onsuccess=()=>ok(q.result||null);q.onerror=()=>ok(null)})}catch(e){return null}},
+  async gravar(n,v){try{const db=await this.abrir();db.transaction('arq','readwrite').objectStore('arq').put(v,n)}catch(e){}}};
+// baixa um arquivo do repositorio so se mudou desde a copia guardada; devolve {data, mudou}
+async function ghCond(p,guardado){
+  const h=H('application/vnd.github.raw+json');if(guardado&&guardado.etag)h['If-None-Match']=guardado.etag;
+  const r=await fetch(API(p),{headers:h,cache:'no-store'});
+  if(r.status===304&&guardado)return {mudou:false};
+  if(!r.ok)throw new Error(`${p}: HTTP ${r.status}`);
+  const txt=await r.text(),etag=r.headers.get('ETag');if(etag)IDB.gravar(p,{etag,txt});return {data:JSON.parse(txt),mudou:true}}
 function ghPut(data,sha){return fetch(API('crm.json'),{method:'PUT',headers:{...H('application/vnd.github+json'),'Content-Type':'application/json'},
   body:JSON.stringify({message:'crm '+new Date().toISOString().slice(0,16),content:b64enc(JSON.stringify(data)),...(sha?{sha}:{})})})}
 function mesclar(rem,loc){
@@ -355,18 +366,32 @@ async function carregar(){
   const ehLocal=['localhost','127.0.0.1'].includes(location.hostname);
   try{
     if(cfg.token&&cfg.owner&&cfg.repo){modo='github';
-      const [d,c,p]=await Promise.all([ghRaw('anuncios.json'),ghCrm(),ghRaw('predios.json').catch(e=>{window.PRED_ERRO=String(e.message||e);return null})]);DATA=d;crmSha=c.sha;CRM=Object.assign(novoCrm(),c.data||{});PRED=p||PRED;ITB=await ghRaw('itbi_cenario.json').catch(()=>null);VIT=await ghRaw('vitrine.json').catch(()=>null);ACO=await ghRaw('acoes.json').catch(()=>null);IMB=await ghRaw('imobiliarias.json').catch(()=>null)}
+      // tudo pedido ao mesmo tempo; a tela abre com a copia guardada (ou com os anuncios, na primeira vez) e o resto chega por tras
+      const guard=await Promise.all(ARQS.map(([n])=>IDB.ler(n)));
+      const rede=ARQS.map(([n],i)=>ghCond(n,guard[i]));
+      const c=await ghCrm();crmSha=c.sha;CRM=Object.assign(novoCrm(),c.data||{});
+      ARQS.forEach(([n,set],i)=>{if(guard[i])try{set(JSON.parse(guard[i].txt))}catch(e){guard[i]=null}});
+      const tinha=!!guard[0];if(!tinha)DATA=(await rede[0]).data;
+      preparar();renderTudo();if(tinha)$('#info').textContent+=' · conferindo atualização…';
+      completarCarga(rede,tinha);return}
     else if(cfg.local||ehLocal){modo='local';
-      DATA=await fetch('dados/anuncios.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('sem dados locais');return r.json()});
-      PRED=await fetch('dados/predios.json',{cache:'no-store'}).then(r=>r.ok?r.json():PRED).catch(()=>PRED);
-      ITB=await fetch('dados/itbi_cenario.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
-      VIT=await fetch('dados/vitrine.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
-      ACO=await fetch('dados/acoes.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
-      IMB=await fetch('dados/imobiliarias.json',{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
+      const pega=n=>fetch('dados/'+n,{cache:'no-store'}).then(r=>r.ok?r.json():null).catch(()=>null);
+      const res=await Promise.all(ARQS.map(([n])=>pega(n)));if(!res[0])throw new Error('sem dados locais');
+      ARQS.forEach(([n,set],i)=>{if(res[i])set(res[i])});
       CRM=Object.assign(novoCrm(),LS.get('painel_crm_local',{}))}
     else{abrirSetup('Conecte o repositório para ver os dados.');return}
   }catch(e){$('#info').textContent='erro: '+e.message;abrirSetup('Não consegui ler os dados: '+e.message);return}
   preparar();renderTudo()}
+const ARQS=[['anuncios.json',d=>DATA=d],['predios.json',d=>PRED=d],['itbi_cenario.json',d=>ITB=d],['vitrine.json',d=>VIT=d],['acoes.json',d=>ACO=d],['imobiliarias.json',d=>IMB=d]];
+// recebe o que veio da rede depois que a tela ja abriu; so remonta se algum arquivo mudou
+async function completarCarga(rede,tinha){
+  const res=await Promise.all(rede.map(p=>p.catch(e=>({erro:e}))));let mudou=false;
+  res.forEach((r,i)=>{const [n,set]=ARQS[i];
+    if(r.erro){if(n==='predios.json'&&!(PRED.predios||[]).length)window.PRED_ERRO=String(r.erro.message||r.erro);return}
+    if(r.mudou&&(i||tinha)){set(r.data);mudou=true}});
+  if(mudou){preparar();renderTudo()}
+  else $('#info').textContent=$('#info').textContent.replace(' · conferindo atualização…','');
+  if(res[0].erro&&tinha)$('#info').textContent+=' · sem conexão com o GitHub, mostrando a cópia guardada'}
 
 // ultima vez que Bruno marcou a lista como conferida (fica no crm.json, vale no celular e no PC); sem marca, os ultimos 3 dias
 function conferidoAte(){return (CRM.config&&CRM.config.conferido_ate)||LS.get('painel_conferido_ate','')||somaDias(-3)+' 00:00'}
@@ -591,8 +616,12 @@ function prepararPredios(){
     if(!IJ.some(x=>x[0]===PF.ij))PF.ij=d.ij;LS.set('painel_pfiltros',PF)}
   const ext=Object.values(CRM.predios_extra||{}).filter(x=>!x.removido).map(x=>({...x,fase:'pronto',unidades:[],total:0,fora_rede:0,areas:[],itens:[],manual:true,rua_total:0}));
   PL=[...(PRED.predios||[]),...ext];
-  const geo=PL.filter(p=>p.lat&&p.fase!=='obra'&&p.total);
-  for(const p of PL)p.perto=p.lat?geo.filter(o=>o!==p&&distM(p,o)<=300).sort((a,b)=>distM(p,a)-distM(p,b)):[];
+  // predios a ate 300 m: grade de ~350 m e busca so nas 9 celas vizinhas (antes comparava todos com todos, 2,5 s na abertura)
+  const geo=PL.filter(p=>p.lat&&p.fase!=='obra'&&p.total),G=0.0032,cel=(i,j)=>i+'|'+j,grade={};
+  for(const o of geo){const k=cel(Math.floor(o.lat/G),Math.floor(o.lng/G));(grade[k]=grade[k]||[]).push(o)}
+  for(const p of PL){if(!p.lat){p.perto=[];continue}const i=Math.floor(p.lat/G),j=Math.floor(p.lng/G),viz=[];
+    for(let di=-1;di<=1;di++)for(let dj=-1;dj<=1;dj++)for(const o of grade[cel(i+di,j+dj)]||[])if(o!==p){const d=distM(p,o);if(d<=300)viz.push([d,o])}
+    p.perto=viz.sort((a,b)=>a[0]-b[0]).map(x=>x[1])}
 }
 const IJ=[['v30','30 dias'],['v90','90 dias'],['v180','6 meses'],['v365','12 meses']];
 const iv=p=>(p.itbi&&p.itbi[PF.ij||'v365'])||0;
