@@ -149,7 +149,6 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
           <label>m² máx.<input id="fAmax" type="number" inputmode="numeric"></label>
           <label class="ck"><input type="checkbox" id="fMulti"> Em 2 ou mais sites</label>
           <label class="ck"><input type="checkbox" id="fQueda"> Baixou o preço</label>
-          <label class="ck"><input type="checkbox" id="fFollow"> Follow-up vencido</label>
           <label class="ck"><input type="checkbox" id="fJanela"> Só últimos 14 dias (publicados ou que entraram no radar; sem estoque antigo)</label>
           <label class="ck"><input type="checkbox" id="fSemBase"> Esconder estoque inicial</label>
           <label class="ck"><input type="checkbox" id="fMaduro"> Proprietário há 45+ dias no ar</label>
@@ -217,15 +216,6 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
   <p class="mut" id="sMsg"></p>
 </dialog>
 
-<dialog id="dlgWpp">
-  <h3>Mensagem de WhatsApp</h3>
-  <label>Modelo<select id="wModelo"></select></label>
-  <label>Telefone (com DDD; vazio abre o WhatsApp para você escolher o contato)<input id="wTel" inputmode="tel" placeholder="51 99999-9999"></label>
-  <label>Texto<textarea id="wTexto" style="min-height:190px"></textarea></label>
-  <label class="ck" style="flex-direction:row;align-items:center;color:var(--tx)"><input type="checkbox" id="wMarcar" checked> Registrar no CRM como acionado hoje</label>
-  <div class="bar"><a class="btn wpp" id="wAbrir" target="_blank" rel="noopener">Abrir no WhatsApp</a><button class="btn" id="wCopiar">Copiar texto</button><span class="grow"></span><button class="btn" id="wFechar">Fechar</button></div>
-</dialog>
-
 <dialog id="dlgManual">
   <h3>Imóvel manual</h3>
   <p class="mut">Para anúncio visto fora do radar (placa, Marketplace, indicação).</p>
@@ -266,16 +256,13 @@ const BAIRROS=[['Moinhos de Vento',-30.0262,-51.2018,'no'],['Bela Vista',-30.035
  ['Menino Deus',-30.0561,-51.2237,'no'],['Jardim Botânico',-30.0525,-51.1742,'no'],['Boa Vista',-30.0228,-51.1798,'na'],['Jardim Europa',-30.0294,-51.1667,'no']];
 const PREP=Object.fromEntries(BAIRROS.map(b=>[b[0],b[3]]));
 const PORTAIS=['ZAP','OLX (proprietário)'];
-const STATUS=[['novo','Novo','#8a8a8a'],['verificar','Checar no CRM','#b07d1a'],['acionado','Acionado','#4A1FD0'],
- ['sem_resposta','Sem resposta','#b23a3a'],['respondeu','Respondeu','#2e7d32'],['avaliacao','Avaliação marcada','#0F6E7A'],['negociando','Em negociação','#9B2C7C'],
- ['agenciado','Agenciado','#1F7A4D'],['descartado','Descartado','#555']];
+// status do anuncio (pedido de Bruno, 23/10): so checando, agenciado e descartado; "novo" e o anuncio ainda sem status
+const STATUS=[['novo','Sem status','#8a8a8a'],['checando','Checando','#b07d1a'],['agenciado','Agenciado','#1F7A4D'],['descartado','Descartado','#555']];
 const STM=Object.fromEntries(STATUS.map(s=>[s[0],{nome:s[1],cor:s[2]}]));
-const ACIONADOS=['acionado','sem_resposta','respondeu','avaliacao','negociando','agenciado'];
-const RESPOSTA=['respondeu','avaliacao','negociando','agenciado'];
-const AVALIOU=['avaliacao','negociando','agenciado'];
+// status antigos do CRM (verificar, acionado, sem resposta, respondeu, avaliacao, negociando) viram "checando"
+const stN=s=>STM[s]?s:(s?'checando':'novo');
 const JANELA=14;  // dias: o painel mostra por padrao so o que entrou ou foi publicado nas ultimas 2 semanas
 const MADURO=45;   // dias no ar a partir dos quais o proprietario que vende sozinho costuma aceitar ajuda (6 a 12 semanas, NAR)
-const MOTIVOS=['Exclusividade vigente','Já está na Auxiliadora','Fora do perfil','Preço fora da realidade','Não quer corretor','Já vendido','Sem contato disponível','Duplicado','Outro'];
 const PERIODOS=[['','Todos'],['0','Hoje'],['3','3 dias'],['7','7 dias'],['30','30 dias']];
 
 const MODELOS_PADRAO={
@@ -301,13 +288,14 @@ const RESPOSTAS=[
 let cfg=LS.get('painel_cfg',{}), modo='', DATA={anuncios:[],gerado_em:''}, CRM=novoCrm(), crmSha=null;
 let ITB=null, IFI=Object.assign({per:'365',tipos:['Apartamento','Cobertura','Flat','Casa','Casa em condomínio'],escopo:'alvo',ord:'n',lim:40},LS.get('painel_ifiltros',{}));
 let PRED={predios:[],ruas:[],gerado_em:''}, PF=Object.assign(predFiltroPadrao(),LS.get('painel_pfiltros',{})), plimite=30, pmapa=null, pcamadas=null, ROTA=new Set(LS.get('painel_rota',[]));
-let ADS=[], NIMOV=0, MED={}, F=normF(LS.get('painel_filtros',null)), OPC={fonte:[],tipo:[]}, limite=40, mapa=null, camadas=null, wppId=null;
+let ADS=[], NIMOV=0, MED={}, F=normF(LS.get('painel_filtros',null)), OPC={fonte:[],tipo:[]}, limite=40, mapa=null, camadas=null;
 const HOJE=new Date(), HOJE_ISO=isoLocal(HOJE);
 
 function novoCrm(){return {leads:{},extras:{},predios:{},predios_extra:{},config:{},modelos:null}}
-function filtrosPadrao(){return {periodo:'',origem:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:['ativos'],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',lev:'',multi:false,queda:false,follow:false,semBase:false,maduro:false,janela:true,novos:false,lanc:false}}
+function filtrosPadrao(){return {periodo:'',origem:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:[],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',lev:'',multi:false,queda:false,semBase:false,maduro:false,janela:true,novos:false,lanc:false}}
 // filtros salvos antes da escolha multipla guardavam texto simples em site, tipo, status e quartos
-function normF(f){f={...filtrosPadrao(),...(f||{})};for(const k of ['bairros','fonte','tipo','status','qts'])if(!Array.isArray(f[k]))f[k]=f[k]?[f[k]]:[];return f}
+function normF(f){f={...filtrosPadrao(),...(f||{})};for(const k of ['bairros','fonte','tipo','status','qts'])if(!Array.isArray(f[k]))f[k]=f[k]?[f[k]]:[];
+  f.status=f.status.filter(k=>['checando','agenciado','descartado'].includes(k));return f}
 function isoLocal(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`}
 function somaDias(n){const d=new Date();d.setDate(d.getDate()+n);return isoLocal(d)}
 function dias(s){if(!s)return 9999;const [y,m,d]=s.slice(0,10).split('-').map(Number);return Math.round((new Date(HOJE.getFullYear(),HOJE.getMonth(),HOJE.getDate())-new Date(y,m-1,d))/864e5)}
@@ -409,6 +397,7 @@ const contarNovos=()=>new Set(ADS.filter(a=>a.conferir&&!['descartado','agenciad
 function comLead(a){const c=(a.grupo||[a]).filter(o=>CRM.leads[o.id]);return c.find(o=>CRM.leads[o.id].status!=='novo')||c[0]||a}
 function leadMut(id){return CRM.leads[id]||(CRM.leads[id]={status:'novo',hist:[]})}
 function preparar(){
+  for(const L of Object.values(CRM.leads||{}))L.status=stN(L.status);
   const extras=Object.values(CRM.extras||{}).filter(x=>!x.removido);
   ADS=[...DATA.anuncios,...extras].map(a=>{const m2=num(a.area_m2);return {...a,outros:a.outros||[],m2,pm2:m2?a.preco/m2:0,rec:a.publicado||a.visto,
     idade:dias(a.publicado||a.visto),estoque:a.base_inicial&&!a.publicado,conf:!!a.publicado,radar:!a.publicado&&!a.base_inicial,
@@ -450,7 +439,7 @@ function pontuar(a){let s=0;const r=[];
 const corScore=s=>s>=50?'#b23a3a':s>=30?'#d97706':s>=15?'#b08d1a':'#8a8a8a';
 
 /* ---------- filtros e lista ---------- */
-const CHECKS={fMulti:'multi',fQueda:'queda',fFollow:'follow',fSemBase:'semBase',fMaduro:'maduro',fJanela:'janela'};
+const CHECKS={fMulti:'multi',fQueda:'queda',fSemBase:'semBase',fMaduro:'maduro',fJanela:'janela'};
 const ORIGENS=[['','Todas'],['conf','Publicação confirmada'],['radar','Detectado pelo radar, sem data']];
 const CAMPOS={fTexto:'texto',fAnunc:'anunc',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fOrdem:'ordem',fLev:'lev'};
 function grupo(id,rot,k,ops){$('#'+id).innerHTML=`<b class="lbl">${rot}</b>`+ops.map(([v,t])=>
@@ -458,14 +447,15 @@ function grupo(id,rot,k,ops){$('#'+id).innerHTML=`<b class="lbl">${rot}</b>`+ops
 const FAIXAS=[['','','Qualquer'],['500','800','500 a 800 mil'],['800','1500','800 mil a 1,5 mi'],['1500','3000','1,5 a 3 mi'],['3000','','Acima de 3 mi']];
 // atalhos de um toque: os recortes mais usados na rotina de agenciamento
 const ATALHOS=[['novos','Novos para conferir',f=>f.novos],['hoje','Publicados hoje (data confirmada)',f=>f.periodo==='0'&&f.origem==='conf'],['radar','Detectados hoje (sem data)',f=>f.periodo==='0'&&f.origem==='radar'],['prop','Proprietário direto',f=>f.anunc==='prop'],['maduro','Dono há 45+ dias no ar',f=>f.maduro],
-  ['queda','Baixou o preço',f=>f.queda],['multi','Em 2+ sites',f=>f.multi],['lanc','Lançamentos',f=>f.lanc],['follow','Follow-up vencido',f=>f.follow]];
+  ['queda','Baixou o preço',f=>f.queda],['multi','Em 2+ sites',f=>f.multi],['lanc','Lançamentos',f=>f.lanc]];
 function atalho(id){const A={novos:()=>F.novos=!F.novos,hoje:()=>{const on=F.periodo==='0'&&F.origem==='conf';F.periodo=on?'':'0';F.origem=on?'':'conf'},radar:()=>{const on=F.periodo==='0'&&F.origem==='radar';F.periodo=on?'':'0';F.origem=on?'':'radar'},prop:()=>F.anunc=F.anunc==='prop'?'':'prop',maduro:()=>F.maduro=!F.maduro,
-  queda:()=>F.queda=!F.queda,multi:()=>F.multi=!F.multi,lanc:()=>F.lanc=!F.lanc,follow:()=>F.follow=!F.follow};A[id]();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()}
+  queda:()=>F.queda=!F.queda,multi:()=>F.multi=!F.multi,lanc:()=>F.lanc=!F.lanc};A[id]();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()}
 function montarFiltros(){
   $('#fPeriodo').innerHTML='<b class="lbl">Período</b>'+PERIODOS.map(([v,t])=>`<span class="chip${F.periodo===v?' on':''}" data-p="${v}">${t}</span>`).join('');
   $('#fOrigem').innerHTML='<b class="lbl">Data</b>'+ORIGENS.map(([v,t])=>`<span class="chip${F.origem===v?' on':''}" data-o="${v}">${t}</span>`).join('');
   grupo('fBairros','Bairro','bairros',BAIRROS.map(([b])=>[b,b]));
-  grupo('fStatus','Status','status',[['ativos','Ativos'],...STATUS.map(([k,n])=>[k,n])]);
+  grupo('fStatus','Status','status',STATUS.slice(1).map(([k,n])=>[k,n]));
+  $('#fStatus').insertAdjacentHTML('beforeend','<span class="mut" style="font-size:12px">nenhum marcado: esconde descartados e agenciados</span>');
   grupo('fFonte','Site','fonte',OPC.fonte.map(f=>[f,f]));
   grupo('fTipo','Tipo','tipo',OPC.tipo.map(t=>[t,t]));
   grupo('fQts','Quartos','qts',[['1','1'],['2','2'],['3','3'],['4','4 ou mais']]);
@@ -481,8 +471,6 @@ function montarFiltros(){
   $('#fJanela2').checked=F.janela;
 }
 function alternar(k,v){let s=F[k].includes(v)?F[k].filter(x=>x!==v):[...F[k],v];
-  // "Ativos" e um atalho: marcar ele limpa os status avulsos, marcar um status avulso desmarca "Ativos"
-  if(k==='status')s=v==='ativos'?s.filter(x=>x==='ativos'):s.filter(x=>x!=='ativos');
   F[k]=s;LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()}
 function lerFiltros(){
   for(const [id,k] of Object.entries(CAMPOS))F[k]=$('#'+id).value;
@@ -505,7 +493,7 @@ function filtrar(){
     if(F.anunc==='imob'&&a.proprietario)return false;
     if(F.fonte.length&&!F.fonte.includes(a.fonte))return false;
     if(F.tipo.length&&!F.tipo.includes(a.tipo||'não informado'))return false;
-    if(F.status.length&&!F.status.some(s=>s==='ativos'?!['descartado','agenciado'].includes(L.status):L.status===s))return false;
+    if(F.status.length?!F.status.includes(L.status):['descartado','agenciado'].includes(L.status))return false;
     if(F.pmin&&a.preco<F.pmin*1000)return false;
     if(F.pmax&&a.preco>F.pmax*1000)return false;
     if(F.amin&&(!a.m2||a.m2<+F.amin))return false;
@@ -514,7 +502,6 @@ function filtrar(){
     if(F.multi&&!a.outros.length)return false;
     if(F.lanc&&!a.unidades)return false;
     if(F.queda&&!(a.preco<a.preco_inicial))return false;
-    if(F.follow&&!(L.followup&&L.followup<=HOJE_ISO&&!['descartado','agenciado'].includes(L.status)))return false;
     if(F.lev&&a.levantamento!==F.lev)return false;
     if(t&&!`${a.rua} ${a.codigo} ${a.fonte} ${a.bairro} ${L.nome||''} ${L.nota||''}`.toLowerCase().includes(t))return false;
     return true});
@@ -550,10 +537,8 @@ function card(a){const L=lead(a.id);const tags=[];
   if(a.preco<a.preco_inicial)tags.push('<span class="tag queda">baixou</span>');
   if(a.maduro)tags.push(`<span class="tag mad">${a.idade} dias no ar</span>`);
   if(a.manual)tags.push('<span class="tag">manual</span>');
-  if(L.followup&&L.followup<=HOJE_ISO&&!['descartado','agenciado'].includes(L.status))tags.push('<span class="tag hoje">follow-up</span>');
   const det=[a.area_m2&&a.area_m2+' m²',a.quartos&&a.quartos+' qts',a.pm2&&money(a.pm2)+'/m²',a.tipo].filter(Boolean).join(' · ');
   const datas=(a.publicado?`publicado ${br(a.publicado)} (confirmado) · visto ${br(a.visto)}`:a.estoque?`data não informada pelo site · já estava no ar quando entrou no radar (${br(a.visto)})`:`data de publicação não informada pelo site · detectado pelo radar em ${br(a.visto)}, pode ser mais antigo`)+(a.ultima&&a.ultima!==a.visto?` · ainda no ar em ${br(a.ultima)}`:'')+(a.outrosNomes.length?` · também em ${esc(a.outrosNomes.join(', '))}`:'');
-  const aberto=abertos.has(a.id);
   return `<article class="card${a.proprietario?' own':''}${L.status==='descartado'?' desc':''}" data-id="${esc(a.id)}">
   <div class="b1">${tags.join('')}<span class="score" style="background:${corScore(a.score)}" title="${esc(a.motivos.join('\n')||'sem sinais fortes')}">${a.score}</span></div>
   <div class="preco">${money(a.preco)}${a.preco<a.preco_inicial?`<s>${money(a.preco_inicial)}</s>`:''}</div>
@@ -561,33 +546,16 @@ function card(a){const L=lead(a.id);const tags=[];
   <div class="loc"><b>${esc(a.bairro)}</b>${a.rua?' · '+esc(a.rua):''} · ${esc(a.fonte)}</div>
   <div class="datas">${datas}</div>
 <div class="acoes">${a.outrosAds.length?`<button class="btn" data-act="anuncios" title="Abrir o anúncio e ver os outros portais">Anúncio ▾</button>`:`<a class="btn" href="${esc(safeUrl(a.link))}" target="_blank" rel="noopener">Anúncio</a>`}
-   <button class="btn wpp" data-act="wpp">WhatsApp</button>
    <select data-act="status" style="border-color:${STM[L.status].cor}">${STATUS.map(([k,n])=>`<option value="${k}"${L.status===k?' selected':''}>${n}</option>`).join('')}</select>
-   <button class="btn" data-act="crm">${aberto?'▴':'CRM ▾'}</button>
-   <button class="btn" data-act="sim" title="Simular financiamento deste imóvel">Simular</button></div>
+   <button class="btn" data-act="sim" title="Simular financiamento deste imóvel">Simular</button>${a.manual?`<button class="btn" data-act="remover" title="Tirar este imóvel manual do painel">Remover</button>`:''}</div>
   ${a.outrosAds.length?`<div class="igual" hidden><a class="lk" href="${esc(safeUrl(a.link))}" target="_blank" rel="noopener">Abrir este anúncio ↗</a><br>Possível mesmo imóvel em: ${a.outrosAds.map(o=>`<a class="lk" href="${esc(safeUrl(o.link))}" target="_blank" rel="noopener">${esc(o.fonte)} · ${money(o.preco)}${o.area_m2?' · '+esc(o.area_m2)+' m²':''}${o.rua?' · '+esc(o.rua):''} ↗</a>`).join(' ')}</div>`:''}
-  <div class="crm"${aberto?'':' hidden'}>
-   <label>Contato é<select data-f="contato"><option value="">?</option><option value="proprietario"${L.contato==='proprietario'?' selected':''}>Proprietário</option><option value="corretor"${L.contato==='corretor'?' selected':''}>Corretor/imobiliária</option></select></label>
-   <label>Nome<input data-f="nome" value="${esc(L.nome)}"></label>
-   <label>Telefone<input data-f="telefone" inputmode="tel" value="${esc(L.telefone)}"></label>
-   <label>Próximo contato<input data-f="followup" type="date" value="${esc(L.followup)}"></label>
-   <label class="full">Motivo do descarte<select data-f="motivo"><option value="">(nenhum)</option>${MOTIVOS.map(m=>`<option${L.motivo===m?' selected':''}>${m}</option>`).join('')}</select></label>
-   <label class="full">Notas<textarea data-f="nota">${esc(L.nota)}</textarea></label>
-   <div class="full hist">${(L.hist||[]).map(h=>`${br(h.d)} ${esc(STM[h.s]?.nome||h.s)}`).join(' → ')||'sem histórico'}${a.manual?` · <a class="lk" data-act="remover">remover imóvel manual</a>`:''}</div>
-  </div></article>`}
-const abertos=new Set();
+  </article>`}
 function rerenderCard(id){const el=$(`.card[data-id="${CSS.escape(id)}"]`);const a=ADS.find(x=>x.id===id);if(el&&a)el.outerHTML=card(a)}
 
 function mudarStatus(id,s){const L=leadMut(id);if(L.status===s)return;
-  L.hist=L.hist||[];L.hist.push({d:HOJE_ISO,s});L.status=s;
-  if(ACIONADOS.includes(s)&&!L.acionado_em)L.acionado_em=HOJE_ISO;
-  if(AVALIOU.includes(s)&&!L.avaliacao_em)L.avaliacao_em=HOJE_ISO;
-  if(RESPOSTA.includes(s)&&!L.respondeu_em)L.respondeu_em=HOJE_ISO;
-  if(s==='acionado'&&!L.followup)L.followup=somaDias(3);
-  if(['descartado','agenciado'].includes(s))L.followup='';
-  L.atualizado=Date.now();salvar()}
+  L.hist=L.hist||[];L.hist.push({d:HOJE_ISO,s});L.status=s;L.atualizado=Date.now();salvar()}
 
-/* ---------- WhatsApp ---------- */
+/* ---------- textos prontos (aba Guia) ---------- */
 function modelos(){return Object.assign({},MODELOS_PADRAO,(CRM.modelos&&CRM.modelos.itens)||{})}
 function preencher(t,a,L){const C=CRM.config||{};
   const desc=[a.quartos&&`${a.quartos} quarto${a.quartos==='1'?'':'s'}`,a.area_m2&&`${a.area_m2} m²`].filter(Boolean).join(' e ');
@@ -595,22 +563,6 @@ function preencher(t,a,L){const C=CRM.config||{};
     tipo:a.tipo||'apartamento',descricao:desc?'de '+desc:'',bairro:a.bairro,no_bairro:`${PREP[a.bairro]||'em'} ${a.bairro}`,
     rua:a.rua||'',preco:money(a.preco),fonte:a.fonte.replace(' (proprietário)',''),link:a.link||''};
   return t.replace(/\{(\w+)\}/g,(m,k)=>k in v?v[k]:m).replace(/ {2,}/g,' ').replace(/ ([,.)])/g,'$1')}
-function abrirWpp(id){wppId=id;const a=ADS.find(x=>x.id===id),L=lead(id),M=modelos();
-  const pad=['acionado','sem_resposta'].includes(L.status)?'followup':RESPOSTA.includes(L.status)?'apresentacao':
-    (L.contato==='corretor'||(!a.proprietario&&L.contato!=='proprietario'))?'parceria':(a.preco<a.preco_inicial?'preco':a.maduro?'maduro':'proprietario');
-  $('#wModelo').innerHTML=Object.entries(M).map(([k,m])=>`<option value="${k}"${k===pad?' selected':''}>${esc(m.titulo)}</option>`).join('');
-  $('#wTel').value=L.telefone||'';$('#wMarcar').checked=['novo','verificar','acionado','sem_resposta'].includes(L.status);
-  textoWpp();$('#dlgWpp').showModal()}
-function textoWpp(){const a=ADS.find(x=>x.id===wppId);$('#wTexto').value=preencher(modelos()[$('#wModelo').value].texto,a,lead(wppId));linkWpp()}
-function linkWpp(){let tel=$('#wTel').value.replace(/\D/g,'');if(tel&&tel.length<=11)tel='55'+tel;
-  $('#wAbrir').href=`https://wa.me/${tel}?text=${encodeURIComponent($('#wTexto').value)}`}
-function registrarWpp(){const L=leadMut(wppId);const tel=$('#wTel').value.trim();if(tel)L.telefone=tel;
-  if($('#wMarcar').checked){const mod=$('#wModelo').value;
-    if(mod==='followup'){L.hist=L.hist||[];L.hist.push({d:HOJE_ISO,s:'followup'});L.followup=somaDias(4);if(L.status==='acionado')mudarStatus(wppId,'sem_resposta')}
-    else if(['novo','verificar'].includes(L.status))mudarStatus(wppId,'acionado');
-    if(!L.contato)L.contato=mod==='parceria'?'corretor':'proprietario'}
-  L.atualizado=Date.now();salvar();rerenderCard(wppId)}
-STM.followup={nome:'retomada enviada',cor:'#888'};
 
 /* ---------- estatisticas por bairro ---------- */
 function statsBairros(){
@@ -766,32 +718,33 @@ function irPredio(id){PF={...predFiltroPadrao(),fases:[],min:'',visao:'lista'};c
 
 /* ---------- abas ---------- */
 function renderFunil(){
-  const ids=new Set(ADS.map(a=>a.id));const Ls=Object.entries(CRM.leads).filter(([id])=>ids.has(id)).map(([id,L])=>({id,...L}));
-  const c=k=>Ls.filter(L=>L.status===k).length;
-  const acion=Ls.filter(L=>L.acionado_em),resp=Ls.filter(L=>L.respondeu_em||RESPOSTA.includes(L.status)),aval=Ls.filter(L=>L.avaliacao_em||AVALIOU.includes(L.status));
-  const semStatus=ADS.length-Ls.filter(L=>L.status!=='novo').length;
+  // um imovel por grupo (mesmo imovel em varios sites conta uma vez), com o status de quem guarda o CRM
+  const im={};for(const a of ADS)if(!im[a.gid]){const c=comLead(a);im[a.gid]={a:c,L:lead(c.id)}}
+  const I=Object.values(im),c=k=>I.filter(x=>x.L.status===k).length;
+  // data em que o imovel entrou em cada status, pelo historico (status antigos do CRM contam como checando)
+  const quando=(L,k)=>{const h=(L.hist||[]).find(h=>stN(h.s)===k);return h?h.d:''};
+  const tratados=I.filter(x=>x.L.status!=='novo'),mes=HOJE_ISO.slice(0,7);
+  const agMes=I.filter(x=>x.L.status==='agenciado'&&quando(x.L,'agenciado').startsWith(mes)).length;
+  const desfecho=c('agenciado')+c('descartado');
   const kpi=(v,t)=>`<div class="kpi"><b>${v}</b><span>${t}</span></div>`;
-  const venc=Ls.filter(L=>L.followup&&L.followup<=HOJE_ISO&&!['descartado','agenciado'].includes(L.status));
-  const motivos={};for(const L of Ls.filter(L=>L.status==='descartado'))motivos[L.motivo||'Sem motivo']=(motivos[L.motivo||'Sem motivo']||0)+1;
   const barra=(l,v,mx,txt)=>`<div class="hb"><span class="l">${esc(l)}</span><span class="t"><i style="width:${mx?100*v/mx:0}%"></i></span><span class="v">${txt??v}</span></div>`;
-  const etapas=[['Na base',ADS.length],['Checados no CRM',Ls.filter(L=>L.status!=='novo').length],['Acionados',acion.length],['Responderam',resp.length],
-    ['Avaliação marcada',aval.length],['Em negociação',c('negociando')+c('agenciado')],['Agenciados',c('agenciado')]];
+  const etapas=[['Imóveis no radar',I.length],['Com status (tratados)',tratados.length],['Checando agora',c('checando')],['Agenciados',c('agenciado')]];
+  const parados=I.filter(x=>x.L.status==='checando').map(x=>({...x,d:quando(x.L,'checando')||''})).sort((p,q)=>p.d.localeCompare(q.d));
   const sem=[];for(let i=7;i>=0;i--){const d=new Date(HOJE);d.setDate(d.getDate()-((d.getDay()+6)%7)-7*i);const ini=isoLocal(d);d.setDate(d.getDate()+6);const fim=isoLocal(d);
-    sem.push([br(ini),acion.filter(L=>L.acionado_em>=ini&&L.acionado_em<=fim).length])}
-  const mxs=Math.max(1,...sem.map(s=>s[1]));
-  const porB=BAIRROS.map(([b])=>{const bi=new Set(ADS.filter(a=>a.bairro===b).map(a=>a.id));const l=Ls.filter(L=>bi.has(L.id));
-    return [b,l.filter(L=>L.acionado_em).length,l.filter(L=>L.respondeu_em||RESPOSTA.includes(L.status)).length,l.filter(L=>L.status==='agenciado').length,l.filter(L=>L.status==='descartado').length]});
-  const nome=id=>{const a=ADS.find(x=>x.id===id);return a?`${a.bairro} · ${mi(a.preco)} · ${a.fonte}`:id};
-  $('#tab-funil').innerHTML=`<div class="kpis">${kpi(semStatus,'Sem tratamento')}${kpi(c('verificar'),'Checar no CRM')}${kpi(acion.length,'Acionados')}${kpi(resp.length,'Responderam')}
-   ${kpi(c('sem_resposta'),'Sem resposta')}${kpi(aval.length,'Avaliações marcadas')}${kpi(c('negociando'),'Em negociação')}${kpi(c('agenciado'),'Agenciados')}${kpi(c('descartado'),'Descartados')}
-   ${kpi(pct(resp.length,acion.length),'Taxa de resposta')}${kpi(pct(aval.length,acion.length),'Acionado → avaliação (referência 5 a 15%)')}
-   ${kpi(pct(c('agenciado'),aval.length),'Avaliação → agenciado (referência 30 a 50%)')}${kpi(pct(c('agenciado'),acion.length),'Acionado → agenciado')}</div>
-  <div class="panel"><h3>Funil</h3>${etapas.map(([l,v])=>barra(l,v,ADS.length)).join('')}</div>
-  <div class="panel"><h3>Follow-ups vencidos ou para hoje (${venc.length})</h3>${venc.length?venc.sort((a,b)=>a.followup.localeCompare(b.followup)).map(L=>`<div class="hb"><a class="lk" data-ir="${esc(L.id)}">${esc(nome(L.id))}</a><span class="grow"></span><span class="mut">${br(L.followup)} · ${esc(STM[L.status]?.nome)}</span></div>`).join(''):'<p class="mut">Nada pendente.</p>'}</div>
-  <div class="panel"><h3>Acionamentos por semana</h3>${sem.map(([l,v])=>barra('semana de '+l,v,mxs)).join('')}</div>
-  <div class="panel"><h3>Descartes por motivo</h3>${Object.keys(motivos).length?Object.entries(motivos).sort((a,b)=>b[1]-a[1]).map(([m,v])=>barra(m,v,c('descartado'))).join(''):'<p class="mut">Nenhum descarte ainda.</p>'}</div>
-  <div class="panel scroll"><h3>Por bairro</h3><table><tr><th>Bairro</th><th>Acionados</th><th>Responderam</th><th>Agenciados</th><th>Descartados</th></tr>
-   ${porB.map(r=>`<tr><td>${esc(r[0])}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td></tr>`).join('')}</table></div>`}
+    const n=k=>I.filter(x=>{const q=quando(x.L,k);return q&&q>=ini&&q<=fim}).length;sem.push([br(ini),n('checando'),n('agenciado'),n('descartado')])}
+  const linha=(l,x)=>{const t=x.filter(y=>y.L.status!=='novo');return [l,x.length,t.filter(y=>y.L.status==='checando').length,t.filter(y=>y.L.status==='agenciado').length,t.filter(y=>y.L.status==='descartado').length]};
+  const porB=BAIRROS.map(([b])=>linha(b,I.filter(x=>x.a.bairro===b)));
+  const fontes=[...new Set(I.map(x=>x.a.fonte))];
+  const porF=fontes.map(f=>linha(f,I.filter(x=>x.a.fonte===f))).filter(r=>r[2]+r[3]+r[4]).sort((p,q)=>q[3]-p[3]||q[2]-p[2]);
+  const tab=(tit,rot,rows)=>`<div class="panel scroll"><h3>${tit}</h3><table><tr><th>${rot}</th><th>No radar</th><th>Checando</th><th>Agenciados</th><th>Descartados</th></tr>
+   ${rows.map(r=>`<tr><td>${esc(r[0])}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td><td>${r[4]}</td></tr>`).join('')||'<tr><td colspan="5" class="mut">Nenhum imóvel com status ainda.</td></tr>'}</table></div>`;
+  $('#tab-funil').innerHTML=`<div class="kpis">${kpi(c('checando'),'Checando')}${kpi(c('agenciado'),'Agenciados')}${kpi(`${agMes}/10`,'Agenciados no mês (meta 10)')}
+   ${kpi(c('descartado'),'Descartados')}${kpi(pct(c('agenciado'),desfecho),'Agenciados entre os que já tiveram desfecho')}${kpi(I.length-tratados.length,'Imóveis sem status')}</div>
+  <div class="panel"><h3>Funil</h3>${etapas.map(([l,v])=>barra(l,v,I.length)).join('')}</div>
+  <div class="panel"><h3>Checando, do mais antigo para o mais novo (${parados.length})</h3>${parados.length?parados.slice(0,30).map(x=>`<div class="hb"><a class="lk" data-ir="${esc(x.a.id)}">${esc(`${x.a.bairro} · ${mi(x.a.preco)} · ${x.a.fonte}`)}</a><span class="grow"></span><span class="mut">${x.d?'desde '+br(x.d):''}</span></div>`).join(''):'<p class="mut">Nenhum imóvel em checagem.</p>'}</div>
+  <div class="panel scroll"><h3>Movimento por semana</h3><table><tr><th>Semana de</th><th>Entraram em checagem</th><th>Agenciados</th><th>Descartados</th></tr>
+   ${sem.map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`).join('')}</table></div>
+  ${tab('Por bairro','Bairro',porB)}${tab('Por site de origem','Site',porF)}`}
 
 function renderMapa(){
   if(!window.L){$('#map').innerHTML='<p class="mut" style="padding:12px">Mapa indisponível sem internet.</p>';return}
@@ -1215,7 +1168,7 @@ function renderTudo(){montarFiltros();renderLista();const ab=$('nav button.on').
 function mostrar(tab){$$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));$$('main>section').forEach(s=>s.hidden=s.id!=='tab-'+tab);
   if(tab==='anuncios')renderLista();if(tab==='predios'){montarFiltrosP();renderPredios()}if(tab==='vitrine')renderVitrine();if(tab==='imobiliarias')renderImobiliarias();if(tab==='itbi')renderItbi();if(tab==='acoes')renderAcoes();if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();if(tab==='guia')renderGuia();window.scrollTo(0,0)}
 function irPara(id){F=filtrosPadrao();F.status=[];LS.set('painel_filtros',F);mostrar('anuncios');montarFiltros();
-  const a=ADS.find(x=>x.id===id);if(!a)return;abertos.add(id);$('#lista').innerHTML=card(a);$('#contagem').textContent='1 anúncio (toque em Limpar filtros para voltar à lista)';$('#btnMais').hidden=true}
+  const a=ADS.find(x=>x.id===id);if(!a)return;$('#lista').innerHTML=card(a);$('#contagem').textContent='1 anúncio (toque em Limpar filtros para voltar à lista)';$('#btnMais').hidden=true}
 function irBairro(b){F=filtrosPadrao();F.bairros=[b];F.ordem='score';LS.set('painel_filtros',F);montarFiltros();mostrar('anuncios')}
 
 /* ---------- configuracao ---------- */
@@ -1248,9 +1201,7 @@ document.addEventListener('click',e=>{const t=e.target;
     if(t.dataset.pact==='remover'){const x=CRM.predios_extra[id];if(x){x.removido=true;x.atualizado=Date.now();salvar();prepararPredios();renderPredios()}}
     return}
   const c=t.closest('.card');if(!c)return;const id=c.dataset.id;
-  if(t.dataset.act==='wpp')abrirWpp(id);
   if(t.dataset.act==='sim'){const a=ADS.find(x=>x.id===id);if(a){LS.set('painel_sim',{...SIM_PADRAO,...LS.get('painel_sim',{}),valor:a.preco});mostrar('guia')}}
-  if(t.dataset.act==='crm'){abertos.has(id)?abertos.delete(id):abertos.add(id);rerenderCard(id)}
   if(t.dataset.act==='remover'){const x=CRM.extras[id];if(x){x.removido=true;x.atualizado=Date.now();salvar();preparar();renderLista()}}
 });
 document.addEventListener('change',e=>{const t=e.target,pc=t.closest('.card[data-pid]');
@@ -1263,9 +1214,6 @@ document.addEventListener('change',e=>{const t=e.target,pc=t.closest('.card[data
   if(t.closest('#pBarra')){PF.texto=$('#pTexto').value;PF.ordem=$('#pOrdem').value;LS.set('painel_pfiltros',PF);plimite=30;renderPredios();return}
   const c=t.closest('.card');
   if(c&&t.dataset.act==='status'){mudarStatus(c.dataset.id,t.value);rerenderCard(c.dataset.id);return}
-  if(c&&t.dataset.f){const L=leadMut(c.dataset.id);L[t.dataset.f]=t.value;
-    if(t.dataset.f==='motivo'&&t.value&&L.status!=='descartado')mudarStatus(c.dataset.id,'descartado');
-    L.atualizado=Date.now();salvar();if(t.dataset.f==='motivo')rerenderCard(c.dataset.id);return}
   if(t.closest('#boxFiltros,#barraRapida'))lerFiltros()});
 $('#fTexto').addEventListener('input',()=>{clearTimeout(window._ft);window._ft=setTimeout(lerFiltros,300)});
 $('#fJanela2').onchange=e=>{F.janela=e.target.checked;LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};
@@ -1273,10 +1221,6 @@ $('#btnLimpar').onclick=$('#btnLimpar2').onclick=()=>{F=filtrosPadrao();LS.set('
 $('#btnMais').onclick=()=>{limite+=40;renderLista()};
 $('#btnReload').onclick=carregar;$('#btnCfg').onclick=()=>abrirSetup('');
 $('#mMetrica').onchange=renderMapa;
-$('#wModelo').onchange=textoWpp;$('#wTel').oninput=linkWpp;$('#wTexto').oninput=linkWpp;
-$('#wAbrir').onclick=()=>{registrarWpp();$('#dlgWpp').close()};
-$('#wCopiar').onclick=()=>{navigator.clipboard?.writeText($('#wTexto').value);registrarWpp();$('#wCopiar').textContent='copiado';setTimeout(()=>$('#wCopiar').textContent='Copiar texto',1500)};
-$('#wFechar').onclick=()=>$('#dlgWpp').close();
 $('#sSalvar').onclick=async()=>{cfg={owner:$('#sOwner').value.trim(),repo:$('#sRepo').value.trim(),token:$('#sToken').value.trim()||cfg.token};
   if(!cfg.owner||!cfg.repo||!cfg.token){$('#sMsg').textContent='Preencha os três campos.';return}
   LS.set('painel_cfg',cfg);$('#dlgSetup').close();carregar()};
