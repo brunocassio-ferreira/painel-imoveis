@@ -328,8 +328,10 @@ async function ghCrm(){const r=await fetch(API('crm.json'),{headers:H('applicati
   const j=await r.json();return {sha:j.sha,data:JSON.parse(b64dec(j.content))}}
 // copia dos dados guardada no aparelho (IndexedDB): abre na hora com a ultima versao e so baixa de novo o que mudou (ETag)
 const IDB={db:null,
-  abrir(){return this.db||(this.db=new Promise((ok,er)=>{const q=indexedDB.open('painel_cache',1);q.onupgradeneeded=()=>q.result.createObjectStore('arq');q.onsuccess=()=>ok(q.result);q.onerror=()=>er(q.error)}))},
-  async ler(n){try{const db=await this.abrir();return await new Promise(ok=>{const q=db.transaction('arq').objectStore('arq').get(n);q.onsuccess=()=>ok(q.result||null);q.onerror=()=>ok(null)})}catch(e){return null}},
+  abrir(){return this.db||(this.db=new Promise((ok,er)=>{const q=indexedDB.open('painel_cache',1);q.onupgradeneeded=()=>q.result.createObjectStore('arq');q.onsuccess=()=>ok(q.result);q.onerror=()=>er(q.error);q.onblocked=()=>er(new Error('bloqueado'))}))},
+  // alguns navegadores de celular nunca respondem ao IndexedDB: depois de 2 s segue sem copia e baixa tudo da rede
+  ler(n){return Promise.race([this._ler(n),new Promise(ok=>setTimeout(()=>ok(null),2000))])},
+  async _ler(n){try{const db=await this.abrir();return await new Promise(ok=>{const q=db.transaction('arq').objectStore('arq').get(n);q.onsuccess=()=>ok(q.result||null);q.onerror=()=>ok(null)})}catch(e){return null}},
   async gravar(n,v){try{const db=await this.abrir();db.transaction('arq','readwrite').objectStore('arq').put(v,n)}catch(e){}}};
 // baixa um arquivo do repositorio so se mudou desde a copia guardada; devolve {data, mudou}
 async function ghCond(p,guardado){
@@ -361,6 +363,9 @@ async function persistir(){
   finally{salvando=false;if(pendente){pendente=false;persistir()}}}
 
 /* ---------- carga ---------- */
+// no celular nao ha console: qualquer erro de carga aparece no topo, no lugar do "carregando..."
+const mostraErro=m=>{const i=$('#info');if(i&&/carregando/.test(i.textContent))i.textContent='erro ao abrir: '+m+' (toque em recarregar e me avise se repetir)'};
+window.addEventListener('error',e=>mostraErro(e.message));window.addEventListener('unhandledrejection',e=>mostraErro(String(e.reason&&e.reason.message||e.reason)));
 async function carregar(){
   setSync('');$('#info').textContent='carregando…';
   const ehLocal=['localhost','127.0.0.1'].includes(location.hostname);
