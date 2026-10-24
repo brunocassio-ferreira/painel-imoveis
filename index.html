@@ -252,9 +252,9 @@ const LS={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d}
           del(k){try{localStorage.removeItem(k)}catch(e){}}};
 
 // bairro, centro aproximado, preposicao usada nas mensagens
-const BAIRROS=[['Moinhos de Vento',-30.0262,-51.2018,'no'],['Bela Vista',-30.0352,-51.1858,'na'],['Auxiliadora',-30.0201,-51.1949,'na'],
- ['Rio Branco',-30.0345,-51.2035,'no'],['Bom Fim',-30.0333,-51.2130,'no'],['Petrópolis',-30.0444,-51.1834,'no'],
- ['Menino Deus',-30.0561,-51.2237,'no'],['Jardim Botânico',-30.0525,-51.1742,'no'],['Boa Vista',-30.0228,-51.1798,'na'],['Jardim Europa',-30.0294,-51.1667,'no']];
+// lista unica de bairros (monitor/bairros.json): Centro-Norte, Azenha e Zona Sul desde 24/10
+const BAIRROS=[["Moinhos de Vento",-30.0262,-51.2018,'no','Centro-Norte'],["Bela Vista",-30.0352,-51.1858,'na','Centro-Norte'],["Auxiliadora",-30.0201,-51.1949,'na','Centro-Norte'],["Rio Branco",-30.0345,-51.2035,'no','Centro-Norte'],["Bom Fim",-30.0333,-51.213,'no','Centro-Norte'],["Petrópolis",-30.0444,-51.1834,'no','Centro-Norte'],["Menino Deus",-30.0561,-51.2237,'no','Centro-Norte'],["Jardim Botânico",-30.0525,-51.1742,'no','Centro-Norte'],["Boa Vista",-30.0228,-51.1798,'na','Centro-Norte'],["Jardim Europa",-30.0294,-51.1667,'no','Centro-Norte'],["Azenha",-30.0507,-51.2156,'na','Azenha'],["Cristal",-30.0895,-51.2395,'no','Zona Sul'],["Camaquã",-30.1092,-51.2382,'no','Zona Sul'],["Cavalhada",-30.1044,-51.2267,'na','Zona Sul'],["Nonoai",-30.089,-51.2146,'no','Zona Sul'],["Teresópolis",-30.0827,-51.209,'no','Zona Sul'],["Vila Nova",-30.116,-51.2075,'na','Zona Sul'],["Tristeza",-30.1103,-51.2567,'na','Zona Sul'],["Vila Assunção",-30.1,-51.2571,'na','Zona Sul'],["Vila Conceição",-30.1206,-51.2571,'na','Zona Sul'],["Pedra Redonda",-30.1282,-51.2434,'na','Zona Sul'],["Ipanema",-30.1391,-51.2244,'no','Zona Sul'],["Espírito Santo",-30.1501,-51.2211,'no','Zona Sul'],["Guarujá",-30.1565,-51.2231,'no','Zona Sul'],["Serraria",-30.1609,-51.2241,'na','Zona Sul'],["Jardim Isabel",-30.1253,-51.2348,'no','Zona Sul'],["Sétimo Céu",-30.1195,-51.2515,'no','Zona Sul'],["Hípica",-30.1596,-51.1772,'na','Zona Sul'],["Belém Novo",-30.2109,-51.1796,'no','Zona Sul'],["Belém Velho",-30.1155,-51.1794,'no','Zona Sul'],["Campo Novo",-30.1346,-51.1988,'no','Zona Sul'],["Aberta dos Morros",-30.16,-51.1975,'na','Zona Sul'],["Ponta Grossa",-30.1773,-51.1819,'na','Zona Sul'],["Lami",-30.2388,-51.084,'no','Zona Sul'],["Chapéu do Sol",-30.1803,-51.1697,'no','Zona Sul']];
+const ZONAS=[...new Set(BAIRROS.map(b=>b[4]))];
 const PREP=Object.fromEntries(BAIRROS.map(b=>[b[0],b[3]]));
 const PORTAIS=['ZAP','OLX','OLX (proprietário)','Chaves na Mão'];
 // status do anuncio (pedido de Bruno, 23/10): so checando, agenciado e descartado; "novo" e o anuncio ainda sem status
@@ -458,6 +458,8 @@ function montarFiltros(){
   $('#fPeriodo').innerHTML='<b class="lbl">Período</b>'+PERIODOS.map(([v,t])=>`<span class="chip${F.periodo===v?' on':''}" data-p="${v}">${t}</span>`).join('');
   $('#fOrigem').innerHTML='<b class="lbl">Data</b>'+ORIGENS.map(([v,t])=>`<span class="chip${F.origem===v?' on':''}" data-o="${v}">${t}</span>`).join('');
   grupo('fBairros','Bairro','bairros',BAIRROS.map(([b])=>[b,b]));
+  $('#fBairros .lbl').insertAdjacentHTML('afterend',ZONAS.map(z=>{const bs=BAIRROS.filter(x=>x[4]===z).map(x=>x[0]);const on=bs.every(b=>F.bairros.includes(b));
+    return `<span class="chip${on?' on':''}" data-zona="${esc(z)}" style="font-weight:700">${esc(z)} (${bs.length})</span>`}).join(''));
   grupo('fStatus','Status','status',STATUS.slice(1).map(([k,n])=>[k,n]));
   $('#fStatus').insertAdjacentHTML('beforeend','<span class="mut" style="font-size:12px">nenhum marcado: esconde descartados e agenciados</span>');
   grupo('fFonte','Site','fonte',OPC.fonte.map(f=>[f,f]));
@@ -1192,6 +1194,8 @@ document.addEventListener('click',e=>{const t=e.target;
   if(t.dataset.p!==undefined&&t.closest('#fPeriodo')){F.periodo=t.dataset.p;LS.set('painel_filtros',F);montarFiltros();renderLista();return}
   if(t.dataset.o!==undefined){F.origem=t.dataset.o;LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista();return}
   if(t.dataset.at){atalho(t.dataset.at);return}
+  if(t.dataset.zona){const bs=BAIRROS.filter(x=>x[4]===t.dataset.zona).map(x=>x[0]),on=bs.every(b=>F.bairros.includes(b));
+    F.bairros=on?F.bairros.filter(b=>!bs.includes(b)):[...new Set([...F.bairros,...bs])];LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista();return}
   if(t.dataset.band!==undefined){[F.pmin,F.pmax]=t.dataset.band.split('|');LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista();return}
   if(t.dataset.g&&t.closest('#boxFiltros')){alternar(t.dataset.g,t.dataset.v);return}
   if(t.dataset.copy!==undefined){navigator.clipboard?.writeText(t.previousElementSibling.textContent);t.textContent='copiado';return}
