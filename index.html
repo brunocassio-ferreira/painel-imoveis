@@ -152,7 +152,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
           <label class="ck"><input type="checkbox" id="fQueda"> Baixou o preço</label>
           <label class="ck"><input type="checkbox" id="fJanela"> Só últimos 14 dias (publicados ou que entraram no radar; sem estoque antigo)</label>
           <label class="ck"><input type="checkbox" id="fSemBase"> Esconder estoque inicial</label>
-          <label class="ck"><input type="checkbox" id="fMaduro"> Proprietário há 45+ dias no ar</label>
+          <label class="ck" hidden><input type="checkbox" id="fMaduro"> Proprietário há 45+ dias no ar</label>
         </div>
       </details>
       <div class="bar"><button class="btn" id="btnLimpar">Limpar filtros</button></div>
@@ -295,7 +295,7 @@ const HOJE=new Date(), HOJE_ISO=isoLocal(HOJE);
 function novoCrm(){return {leads:{},extras:{},predios:{},predios_extra:{},config:{},modelos:null}}
 function filtrosPadrao(){return {periodo:'',origem:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:[],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',lev:'',multi:false,unico:false,queda:false,semBase:false,maduro:false,janela:true,novos:false,lanc:false}}
 // filtros salvos antes da escolha multipla guardavam texto simples em site, tipo, status e quartos
-function normF(f){f={...filtrosPadrao(),...(f||{})};for(const k of ['bairros','fonte','tipo','status','qts'])if(!Array.isArray(f[k]))f[k]=f[k]?[f[k]]:[];
+function normF(f){f={...filtrosPadrao(),...(f||{}),maduro:false};for(const k of ['bairros','fonte','tipo','status','qts'])if(!Array.isArray(f[k]))f[k]=f[k]?[f[k]]:[];
   f.status=f.status.filter(k=>['checando','agenciado','descartado'].includes(k));return f}
 function isoLocal(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`}
 function somaDias(n){const d=new Date();d.setDate(d.getDate()+n);return isoLocal(d)}
@@ -400,8 +400,8 @@ function leadMut(id){return CRM.leads[id]||(CRM.leads[id]={status:'novo',hist:[]
 function preparar(){
   for(const L of Object.values(CRM.leads||{}))L.status=stN(L.status);
   const extras=Object.values(CRM.extras||{}).filter(x=>!x.removido);
-  ADS=[...DATA.anuncios,...extras].map(a=>{const m2=num(a.area_m2);return {...a,outros:a.outros||[],m2,pm2:m2?a.preco/m2:0,rec:a.publicado||a.visto,
-    idade:dias(a.publicado||a.visto),estoque:a.base_inicial&&!a.publicado,conf:!!a.publicado,radar:!a.publicado&&!a.base_inicial,
+  ADS=[...DATA.anuncios,...extras].map(a=>{const m2=num(a.area_m2);return {...a,outros:a.outros||[],m2,pm2:m2?a.preco/m2:0,rec:a.primeira||a.publicado||a.visto,
+    idade:dias(a.primeira||a.publicado||a.visto),estoque:a.base_inicial&&!a.publicado,conf:!!a.publicado,radar:!a.publicado&&!a.base_inicial,
     entrada:a.levantamento||(a.visto?a.visto.slice(0,10)+' 00:00':'')}});
   // novidade = entrou no radar nas ultimas 2 semanas (com data de publicacao ou nao); "para conferir" = entrou depois da ultima conferencia
   const ca=conferidoAte();
@@ -433,10 +433,12 @@ function preparar(){
 }
 function pontuar(a){let s=0;const r=[];
   if(a.proprietario){s+=30;r.push('proprietário direto (+30)')}
-  if(a.outros.length){s+=20;r.push(`em ${a.outros.length+1} sites, sinal de que não há exclusividade (+20)`)}
+  // objetivo do painel (24/10): chegar ao anuncio pioneiro; imovel em um site so vale mais que o ja espalhado
+  if(!a.outros.length&&!a.manual){s+=25;r.push('único: só um site anuncia, provável anúncio pioneiro (+25)')}
+  else if(a.outros.length){s+=5;r.push(`em ${a.outros.length+1} sites, sem exclusividade (+5)`)}
   if(a.preco_inicial&&a.preco<a.preco_inicial){s+=15;r.push('baixou o preço (+15)')}
   if(a.maduro){s+=15;r.push(`proprietário há ${a.idade} dias no ar, fase em que quem vende sozinho costuma aceitar ajuda (+15)`)}
-  if(a.conf){if(a.idade<=3){s+=20;r.push('anúncio de até 3 dias (+20)')}else if(a.idade<=7){s+=12;r.push('anúncio desta semana (+12)')}else if(a.idade<=30){s+=5;r.push('anúncio do mês (+5)')}}
+  if(a.idade<=1){s+=20;r.push('imóvel apareceu pela primeira vez hoje ou ontem (+20)')}else if(a.idade<=3){s+=15;r.push('primeira aparição há até 3 dias (+15)')}else if(a.idade<=7){s+=8;r.push('primeira aparição nesta semana (+8)')}
   if(a.pm2&&MED[a.bairro]&&a.pm2>MED[a.bairro]*1.15){s+=10;r.push('R$/m² 15% acima da mediana do bairro, abre conversa sobre avaliação (+10)')}
   if(a.preco>=1.5e6){s+=5;r.push('ticket a partir de R$ 1,5 mi (+5)')}
   return [Math.min(100,s),r]}
@@ -450,9 +452,9 @@ function grupo(id,rot,k,ops){$('#'+id).innerHTML=`<b class="lbl">${rot}</b>`+ops
   `<span class="chip${F[k].includes(v)?' on':''}" data-g="${k}" data-v="${esc(v)}">${esc(t)}</span>`).join('')}
 const FAIXAS=[['','','Qualquer'],['500','800','500 a 800 mil'],['800','1500','800 mil a 1,5 mi'],['1500','3000','1,5 a 3 mi'],['3000','','Acima de 3 mi']];
 // atalhos de um toque: os recortes mais usados na rotina de agenciamento
-const ATALHOS=[['novos','Novos para conferir',f=>f.novos],['hoje','Publicados hoje (data confirmada)',f=>f.periodo==='0'&&f.origem==='conf'],['radar','Detectados hoje (sem data)',f=>f.periodo==='0'&&f.origem==='radar'],['prop','Proprietário direto',f=>f.anunc==='prop'],['maduro','Dono há 45+ dias no ar',f=>f.maduro],
+const ATALHOS=[['novos','Novos para conferir',f=>f.novos],['hoje','Publicados hoje (data confirmada)',f=>f.periodo==='0'&&f.origem==='conf'],['radar','Detectados hoje (sem data)',f=>f.periodo==='0'&&f.origem==='radar'],['prop','Proprietário direto',f=>f.anunc==='prop'],['pioneiros','Únicos de hoje (pioneiros)',f=>f.unico&&f.periodo==='0'],
   ['queda','Baixou o preço',f=>f.queda],['unico','Só únicos (um site)',f=>f.unico],['multi','Em 2+ sites',f=>f.multi],['lanc','Lançamentos',f=>f.lanc]];
-function atalho(id){const A={novos:()=>F.novos=!F.novos,hoje:()=>{const on=F.periodo==='0'&&F.origem==='conf';F.periodo=on?'':'0';F.origem=on?'':'conf'},radar:()=>{const on=F.periodo==='0'&&F.origem==='radar';F.periodo=on?'':'0';F.origem=on?'':'radar'},prop:()=>F.anunc=F.anunc==='prop'?'':'prop',maduro:()=>F.maduro=!F.maduro,
+function atalho(id){const A={novos:()=>F.novos=!F.novos,hoje:()=>{const on=F.periodo==='0'&&F.origem==='conf';F.periodo=on?'':'0';F.origem=on?'':'conf'},radar:()=>{const on=F.periodo==='0'&&F.origem==='radar';F.periodo=on?'':'0';F.origem=on?'':'radar'},prop:()=>F.anunc=F.anunc==='prop'?'':'prop',pioneiros:()=>{const on=F.unico&&F.periodo==='0';F.unico=!on;F.periodo=on?'':'0'},
   queda:()=>F.queda=!F.queda,multi:()=>F.multi=!F.multi,unico:()=>F.unico=!F.unico,lanc:()=>F.lanc=!F.lanc};A[id]();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()}
 function montarFiltros(){
   $('#fPeriodo').innerHTML='<b class="lbl">Período</b>'+PERIODOS.map(([v,t])=>`<span class="chip${F.periodo===v?' on':''}" data-p="${v}">${t}</span>`).join('');
@@ -961,10 +963,41 @@ const FLUXO_CAIXA=[
  ['ITBI','Comprador emite e paga a guia na Prefeitura (alguns bancos pedem o comprovante já na assinatura).'],
  ['Registro','Registro de Imóveis; o banco envia eletronicamente ou o comprador leva o contrato.'],
  ['Liberação do dinheiro','Banco paga o vendedor (financiamento + FGTS) depois do registro. Se a comissão estiver atrelada ao recebimento, sai aqui.']];
+// manual de filtros (pedido de Bruno, 24/10): como chegar aos anuncios mais recentes, com o anuncio pioneiro em primeiro lugar
+const MANUAL_FILTROS=`<div class="panel"><h3>Manual de filtros: os anúncios mais recentes primeiro</h3>
+ <p class="mut">O painel mostra só imóveis cuja primeira aparição, em qualquer site, foi nos últimos 14 dias. O que já estava no ar antes fica guardado no histórico e serve para reconhecer republicações. A data de cada card é a do imóvel, não a do anúncio: um ZAP novo de um imóvel que a Lopes anuncia desde o dia 10 conta como dia 10.</p>
+ <details class="box" open><summary><b>1. Rotina de cada atualização (3 vezes por dia)</b></summary><ol class="fluxo">
+  <li><b>Atalho "Novos para conferir".</b> Traz o que entrou desde a última vez que você tocou em "Marquei como conferidos". Ordem "Mais recentes".</li>
+  <li><b>Atalho "Únicos de hoje (pioneiros)".</b> Imóveis que apareceram hoje pela primeira vez e estão em um site só. É a lista de maior prioridade: provavelmente o primeiro anúncio, antes de o imóvel se espalhar.</li>
+  <li><b>Atalho "Proprietário direto".</b> Anúncios do OLX confirmados como do próprio dono. O contato é pelo anúncio, sem imobiliária no meio.</li>
+  <li>Em cada imóvel interessante: <b>Dono ▾</b> para ver prédio, síndico e vendas do ITBI; <b>Ficha</b> para o estudo de mercado em PDF; status <b>Checando</b> para não perder.</li>
+  <li>No fim, <b>"Marquei como conferidos"</b>. Na próxima atualização, só o que for novo aparece no atalho.</li></ol>
+  <p class="mut">O horário da última atualização aparece no topo. As rodadas começam às 8:40, 12:40 e 18:40 e publicam cerca de uma hora e meia depois; a de madrugada atualiza tudo antes das 9h.</p></details>
+ <details class="box"><summary><b>2. Combinações que funcionam melhor</b></summary><ul>
+  <li><b>Pioneiros da semana:</b> "Só únicos (um site)" + Período "7 dias" + ordem "Mais recentes".</li>
+  <li><b>Pioneiros por região:</b> Bairro, toque em "Zona Sul", "Azenha" ou "Centro-Norte" para marcar a região inteira de uma vez, + "Só únicos".</li>
+  <li><b>Data garantida:</b> Data "Publicação confirmada". Só anúncios cujo site informa o dia da publicação (ZAP, OLX, QuintoAndar e alguns outros).</li>
+  <li><b>Sites sem data:</b> Data "Detectado pelo radar, sem data". Crédito Real, Colnaghi, Chaves na Mão e as imobiliárias pequenas não informam o dia; vale a primeira vez que o radar viu o imóvel. O código do anúncio é conferido: se ele é antigo, o card mostra a data provável real.</li>
+  <li><b>O que uma rodada trouxe:</b> escolha a rodada em "Todos os levantamentos" (ex.: "leve 12:40") para ver exatamente o que ela encontrou.</li>
+  <li><b>Dono flexível:</b> "Baixou o preço". Quem já baixou costuma ouvir uma proposta de avaliação.</li>
+  <li><b>Melhor oportunidade do dia:</b> ordem "Maior oportunidade". A nota soma: único (+25), primeira aparição hoje ou ontem (+20), proprietário direto (+30), baixou o preço (+15), R$/m² acima da mediana do bairro (+10), ticket de R$ 1,5 mi ou mais (+5). Toque na nota para ver o motivo.</li></ul></details>
+ <details class="box"><summary><b>3. O que cada etiqueta quer dizer</b></summary><ul>
+  <li><b>NOVO NO RADAR:</b> entrou depois da sua última conferência.</li>
+  <li><b>ÚNICO:</b> nenhum outro site tem esse imóvel. A comparação é pelas fotos, não só por área e preço.</li>
+  <li><b>N sites:</b> o mesmo imóvel em vários sites; os outros links ficam em "Anúncio ▾".</li>
+  <li><b>apareceu também em X:</b> imóvel que você já tinha visto, agora anunciado em mais um site. Não é novidade.</li>
+  <li><b>1ª aparição do imóvel:</b> a data e o site pioneiro, com o link.</li>
+  <li><b>LANÇAMENTO?:</b> várias unidades iguais da mesma imobiliária; quem vende costuma ser a construtora.</li>
+  <li><b>Faixa vermelha no topo:</b> algum site falhou na última rodada; imóveis dele podem estar faltando até a próxima.</li></ul></details>
+ <details class="box"><summary><b>4. O que o painel já tira sozinho</b></summary><ul>
+  <li>Auxiliadora, Foxter, Loft e Suder: pelo nome do anunciante e pelas fotos (a mesma foto, mesmo com a marca d'água de outro site, revela o imóvel da rede).</li>
+  <li>Republicações: imóvel já anunciado em outro site antes dos 14 dias, ou anúncio com código antigo.</li>
+  <li>Descartados há mais de 14 dias. Sem nenhum status marcado no filtro, descartados e agenciados ficam escondidos; marque o status para vê-los.</li></ul></details>
+</div>`;
 function renderGuia(){
   const s={...SIM_PADRAO,...LS.get('painel_sim',{})};
   const campo=(k,t,extra='')=>`<label>${t}<input type="number" step="any" data-sim="${k}" value="${s[k]}" ${extra}></label>`;
-  $('#tab-guia').innerHTML=`<div class="panel"><h3>Simulador de financiamento</h3>
+  $('#tab-guia').innerHTML=`${MANUAL_FILTROS}<div class="panel"><h3>Simulador de financiamento</h3>
    <div class="fgrid">${campo('valor','Valor do imóvel (R$)')}${campo('entrada','Entrada (%)')}${campo('fgts','FGTS disponível (R$)')}
     ${campo('renda','Renda bruta familiar (R$/mês)')}${campo('taxa','Juros (% a.a., sem TR)')}${campo('prazo','Prazo (meses)')}${campo('idade','Idade do comprador mais velho')}
     <label>Sistema<select data-sim="sistema"><option value="sac"${s.sistema==='sac'?' selected':''}>SAC (parcela cai)</option><option value="price"${s.sistema==='price'?' selected':''}>Price (parcela fixa)</option></select></label></div>
