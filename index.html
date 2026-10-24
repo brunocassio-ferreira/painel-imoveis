@@ -557,10 +557,88 @@ function card(a){const L=lead(a.id);const tags=[];
   <div class="datas">${datas}</div>
 <div class="acoes">${a.outrosAds.length?`<button class="btn" data-act="anuncios" title="Abrir o anúncio e ver os outros portais">Anúncio ▾</button>`:`<a class="btn" href="${esc(safeUrl(a.link))}" target="_blank" rel="noopener">Anúncio</a>`}
    <select data-act="status" style="border-color:${STM[L.status].cor}">${STATUS.map(([k,n])=>`<option value="${k}"${L.status===k?' selected':''}>${n}</option>`).join('')}</select>
-   <button class="btn" data-act="sim" title="Simular financiamento deste imóvel">Simular</button>${a.manual?`<button class="btn" data-act="remover" title="Tirar este imóvel manual do painel">Remover</button>`:''}</div>
+   <button class="btn" data-act="sim" title="Simular financiamento deste imóvel">Simular</button>
+   <button class="btn" data-act="ficha" title="Estudo de mercado em PDF para levar ao proprietário">Ficha</button>
+   <button class="btn" data-act="dono" title="Prédio, síndico, zelador e vendas do ITBI: o caminho até o proprietário">Dono ▾</button>${a.manual?`<button class="btn" data-act="remover" title="Tirar este imóvel manual do painel">Remover</button>`:''}</div>
   ${a.outrosAds.length?`<div class="igual" hidden><a class="lk" href="${esc(safeUrl(a.link))}" target="_blank" rel="noopener">Abrir este anúncio ↗</a><br>Possível mesmo imóvel em: ${a.outrosAds.map(o=>`<a class="lk" href="${esc(safeUrl(o.link))}" target="_blank" rel="noopener">${esc(o.fonte)} · ${money(o.preco)}${o.area_m2?' · '+esc(o.area_m2)+' m²':''}${o.rua?' · '+esc(o.rua):''} ↗</a>`).join(' ')}</div>`:''}
+  <div class="dono" hidden style="margin-top:6px;font-size:13px"></div>
   </article>`}
 function rerenderCard(id){const el=$(`.card[data-id="${CSS.escape(id)}"]`);const a=ADS.find(x=>x.id===id);if(el&&a)el.outerHTML=card(a)}
+
+/* ---------- ficha de captação e caminho até o dono (24/10: o painel como ferramenta de agenciamento, na linha do eemovel) ---------- */
+const semAc=s=>String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim();
+const CAT_ITBI={apartamento:'Apartamento',cobertura:'Cobertura',casa:'Casa','casa em condominio':'Casa em condomínio',sobrado:'Casa',terreno:'Terreno',studio:'Apartamento',loft:'Apartamento',duplex:'Apartamento'};
+const catDe=t=>{t=semAc(t);for(const k of ['casa em condominio','cobertura','terreno','sobrado','casa','studio','loft','duplex'])if(t.includes(k))return k;return 'apartamento'};
+let PIDX=null,PIDXn=-1,MERC=null;
+// predio do anuncio: ligacao direta pela lista de unidades da aba Predios; sem ela, predio da mesma rua com area parecida
+function predioDe(a){
+  if(!PIDX||PIDXn!==PL.length){PIDX={};PIDXn=PL.length;for(const p of PL)for(const u of (p.unidades||[]))PIDX[u.fonte+':'+u.codigo]={p,certo:u.certo}}
+  for(const o of (a.grupo||[a])){const x=PIDX[o.id]||PIDX[o.fonte+':'+o.codigo];if(x)return x}
+  if(!a.rua)return null;const r=semAc(a.rua).replace(/^(rua|r|avenida|av|travessa|tv)\.?\s+/,'');if(r.length<4)return null;
+  const c=PL.filter(p=>p.bairro===a.bairro&&semAc(p.rua).includes(r)&&(!a.m2||(p.areas||[]).some(x=>Math.abs(x-a.m2)<=3)));
+  return c.length===1?{p:c[0],certo:false}:(c.length?{lista:c.slice(0,5)}:null)}
+function itbiBairro(bairro,tipo){if(!ITB||!ITB.linhas)return null;const nb=semAc(bairro);
+  const bi=(ITB.bairros||[]).findIndex(b=>semAc(b)===nb||nb.startsWith(semAc(b)));const ci=(ITB.categorias||[]).indexOf(CAT_ITBI[catDe(tipo)]);
+  if(bi<0||ci<0)return null;const L=ITB.linhas.find(l=>l[0]===bi&&l[1]===ci);const v=L&&L[2]['365'];return v&&v[3]?{n:v[0],m2:v[2]/v[3]}:null}
+// mercado ativo de todos os sites (mercado.json): so baixa quando uma ficha e aberta, e fica guardado no aparelho
+async function carregarMercado(){if(MERC)return MERC;
+  if(modo==='github'){const g=await IDB.ler('mercado.json');let r;try{r=await ghCond('mercado.json',g)}catch(e){if(!g)throw e;r={mudou:false}}
+    MERC=r.mudou?r.data:JSON.parse(g.txt)}
+  else MERC=await fetch('dados/mercado.json',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('mercado.json HTTP '+r.status);return r.json()});
+  return MERC}
+async function fichaCaptacao(a){
+  const w=window.open('','_blank');if(!w){alert('Libere pop-ups para este site para gerar a ficha.');return}
+  w.document.write('<p style="font:14px Arial;padding:20px">Montando a ficha…</p>');
+  let M;try{M=await carregarMercado()}catch(e){w.document.body.innerHTML='<p style="font:14px Arial;padding:20px">Não consegui baixar o mercado: '+esc(e.message)+'</p>';return}
+  const cat=catDe(a.tipo),meus=new Set((a.grupo||[a]).map(o=>o.link)),area=a.m2||0;
+  const comp=(M.itens||[]).filter(x=>x.b===a.bairro&&catDe(x.t)===cat&&x.m2&&x.p&&!meus.has(x.l)&&(!area||Math.abs(x.m2-area)<=Math.max(8,area*0.2))
+    &&(!a.quartos||!x.q||String(x.q)===String(a.quartos)));
+  comp.sort((x,y)=>Math.abs(x.m2-(area||x.m2))-Math.abs(y.m2-(area||y.m2))||x.p-y.p);
+  const pm2=comp.map(x=>x.p/x.m2).sort((x,y)=>x-y),qt=f=>pm2.length?pm2[Math.min(pm2.length-1,Math.floor(f*pm2.length))]:0;
+  const med=qt(.5),p25=qt(.25),p75=qt(.75),diasMed=mediana(comp.map(x=>dias(x.d)).filter(x=>x<9999));
+  const pr=predioDe(a),P=pr&&pr.p,itP=P&&P.itbi&&P.itbi.m2_med?P.itbi:null,itB=itbiBairro(a.bairro,a.tipo);
+  const m2=v=>'R$ '+Math.round(v).toLocaleString('pt-BR')+'/m²';
+  const refs=[];
+  if(med&&area)refs.push(['Anúncios parecidos ativos (mediana)',med*area,`${pm2.length} imóveis · ${m2(med)} · faixa central ${m2(p25)} a ${m2(p75)}`]);
+  if(itP&&area)refs.push([`Vendas registradas no prédio (ITBI, 12 meses)`,itP.m2_med*area,`${itP.v365||0} vendas · ${m2(itP.m2_med)}`]);
+  if(itB&&area)refs.push([`Vendas registradas no bairro (ITBI, 12 meses)`,itB.m2*area,`${itB.n} vendas de ${esc((CAT_ITBI[cat]||'').toLowerCase())} · ${m2(itB.m2)}`]);
+  const pontos=[];
+  if(med&&a.pm2){const d=Math.round((a.pm2/med-1)*100);pontos.push(d>3?`O preço pedido está ${d}% acima da mediana dos ${pm2.length} anúncios parecidos no bairro (${m2(a.pm2)} contra ${m2(med)}).`:d<-3?`O preço pedido está ${-d}% abaixo da mediana dos ${pm2.length} anúncios parecidos no bairro: tende a vender mais rápido.`:`O preço pedido está alinhado com a mediana dos ${pm2.length} anúncios parecidos no bairro.`)}
+  const base=DATA.data_base||'2026-10-07',antigos=comp.filter(x=>x.d<=base).length;
+  if(comp.length&&antigos/comp.length>=0.3)pontos.push(`${antigos} dos ${comp.length} anúncios parecidos já estavam à venda quando o radar começou (${br(base)}), há mais de ${dias(base)} dias: o mercado desse perfil anda devagar.`);
+  else if(comp.length&&diasMed<9999)pontos.push(`A maior parte dos anúncios parecidos entrou no mercado há pouco tempo (mediana de ${diasMed} dias): é um perfil com oferta nova.`);
+  if(itB&&med){const d=Math.round((med/itB.m2-1)*100);if(Math.abs(d)>5)pontos.push(`No bairro, os anúncios pedem em média ${Math.abs(d)}% ${d>0?'acima':'abaixo'} do valor registrado nas vendas do ITBI: é a margem de negociação que o mercado tem praticado.`)}
+  if(itP)pontos.push(`O prédio teve ${itP.v365||0} venda${itP.v365===1?'':'s'} registrada${itP.v365===1?'':'s'} no ITBI em 12 meses.`);
+  if(a.preco<a.preco_inicial)pontos.push(`O anúncio já baixou de ${money(a.preco_inicial)} para ${money(a.preco)}.`);
+  if(a.outros.length)pontos.push(`O imóvel aparece em ${a.outros.length+1} sites ao mesmo tempo, sem exclusividade.`);
+  const nome=CRM.config?.meu_nome||'Bruno Ferreira',ag=CRM.config?.agencia||'Suder Imóveis, da rede Auxiliadora Predial';
+  const tit=[a.tipo||'Imóvel',area&&area+' m²',a.quartos&&a.quartos+' quartos'].filter(Boolean).join(' · ');
+  w.document.open();w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Estudo de mercado ${esc(a.bairro)}</title>
+<style>@page{size:A4;margin:12mm}body{font:13px/1.45 Arial,sans-serif;color:#1a1626;background:#fff;margin:14px;max-width:780px}
+.cab{background:#0F0A1A;color:#fff;padding:14px 16px;border-radius:6px}.cab b{font-size:19px}.cab div{color:#E3DCFA}
+h2{font-size:14px;color:#4A1FD0;margin:16px 0 6px;border-bottom:2px solid #E3DCFA;padding-bottom:3px}
+table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #eee;padding:4px 6px;text-align:left;font-size:12px}th{color:#555;font-weight:normal}
+.v{font-size:17px;font-weight:bold}.mut{color:#666;font-size:12px}a{color:#4A1FD0}li{margin:3px 0}@media print{.noprint{display:none}}</style></head><body>
+<button class="noprint" onclick="print()" style="padding:8px 14px;margin-bottom:10px">Salvar em PDF / imprimir</button>
+<div class="cab"><b>Estudo de mercado</b><div>${esc(tit)} · ${esc(a.bairro)}${a.rua?' · '+esc(a.rua):''} · ${br(HOJE_ISO)}</div></div>
+<h2>O imóvel</h2><div class="v">${money(a.preco)}</div><div>${area?m2(a.pm2)+' · ':''}anunciado desde ${br(a.primeira||a.visto)}${a.historico&&a.historico.length?' · histórico de preço: '+a.historico.map(h=>br(h[0])+' '+money(h[1])).join(', '):''}</div>
+<h2>Referências de valor</h2>${refs.length?`<table><tr><th>Base</th><th>Valor para ${area} m²</th><th>Detalhe</th></tr>${refs.map(r=>`<tr><td>${r[0]}</td><td><b>${money(r[1])}</b></td><td>${r[2]}</td></tr>`).join('')}</table>`:'<p class="mut">Sem área informada ou sem base suficiente para calcular.</p>'}
+${pontos.length?`<h2>Pontos para a conversa</h2><ul>${pontos.map(p=>`<li>${p}</li>`).join('')}</ul>`:''}
+<h2>Anúncios parecidos à venda agora (${comp.length})</h2>${comp.length?`<table><tr><th>Preço</th><th>m²</th><th>R$/m²</th><th>Qts</th><th>Rua</th><th>Visto desde</th><th>Site</th></tr>${comp.slice(0,12).map(x=>`<tr><td>${money(x.p)}</td><td>${x.m2}</td><td>${Math.round(x.p/x.m2).toLocaleString('pt-BR')}</td><td>${esc(x.q)}</td><td>${esc(x.r||'')}</td><td>${x.d<=(DATA.data_base||'2026-10-07')?'antes de '+br(DATA.data_base||'2026-10-07'):br(x.d)}</td><td><a href="${esc(safeUrl(x.l))}">${esc(x.f)}${x.n>1?' +'+(x.n-1):''}</a></td></tr>`).join('')}</table>`:'<p class="mut">Nenhum anúncio parecido no bairro agora.</p>'}
+<p class="mut" style="margin-top:18px">${esc(nome)} · ${esc(ag)}<br>Referência de mercado montada a partir dos anúncios ativos nos principais portais e imobiliárias de Porto Alegre e das vendas registradas no ITBI da Prefeitura (valores declarados). Não substitui a avaliação formal do imóvel.</p>
+</body></html>`);w.document.close()}
+function donoHtml(a){const pr=predioDe(a),out=[];
+  if(pr&&pr.p){const p=pr.p,f=pficha(p.id);
+    out.push(`<b>${pr.certo?'Prédio':'Prédio provável'}: ${esc(p.nome||endereco(p))}</b> · ${esc(endereco(p))} · <a class="lk" href="${esc(mapsUrl(p))}" target="_blank" rel="noopener">mapa ↗</a>${p.lat?` · <a class="lk" href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${p.lat},${p.lng}" target="_blank" rel="noopener">fachada no Street View ↗</a>`:''} · <a class="lk" data-pir="${esc(p.id)}">ficha do prédio</a>`);
+    if(p.itbi)out.push(itbiResumo(p.itbi));
+    const cont=[f.sindico&&`síndico ${f.sindico}${f.sindico_tel?' '+f.sindico_tel:''}`,f.zelador&&`zelador ${f.zelador}${f.zelador_tel?' '+f.zelador_tel:''}`,f.adm&&`administradora ${f.adm}`,f.apto_contato&&`moradores que querem vender: ${f.apto_contato}`].filter(Boolean);
+    out.push(cont.length?esc(cont.join(' · ')):'Sem síndico ou zelador anotado: na visita, anote na ficha do prédio.');
+    if(p.total>1)out.push(`${p.total} unidades à venda no prédio${p.fora_rede?`, ${p.fora_rede} fora da rede`:''}.`)}
+  else if(pr&&pr.lista)out.push('Prédios possíveis na mesma rua, com unidade de área parecida: '+pr.lista.map(p=>`<a class="lk" data-pir="${esc(p.id)}">${esc(p.nome||endereco(p))}</a>`).join(' · '));
+  else out.push(`Prédio não identificado${a.rua?' na '+esc(a.rua):''}: o anúncio não informa o número.`);
+  if(a.proprietario)out.push('<b>Anunciado pelo próprio dono:</b> o contato é pelo anúncio.');
+  out.push('<span class="mut">Antes de abordar: conferir no CRM com A Venda ligado; proprietário pelo IPTU (SIAT) com o endereço completo; abordagem pela portaria ou pelo síndico.</span>');
+  return out.map(x=>`<div style="margin:3px 0">${x}</div>`).join('')}
 
 function mudarStatus(id,s){const L=leadMut(id);if(L.status===s)return;
   L.hist=L.hist||[];L.hist.push({d:HOJE_ISO,s});L.status=s;L.atualizado=Date.now();salvar()}
@@ -1187,6 +1265,9 @@ function abrirSetup(msg){$('#sOwner').value=cfg.owner||'';$('#sRepo').value=cfg.
 
 /* ---------- eventos ---------- */
 document.addEventListener('click',e=>{const t=e.target;
+  if(t.dataset.act==='dono'){const c=t.closest('.card'),d=c?.querySelector('.dono'),a=c&&ADS.find(x=>x.id===c.dataset.id);
+    if(d&&a){if(d.hidden)d.innerHTML=donoHtml(a);d.hidden=!d.hidden;t.textContent=d.hidden?'Dono ▾':'Dono ▴'}return}
+  if(t.dataset.act==='ficha'){const a=ADS.find(x=>x.id===t.closest('.card')?.dataset.id);if(a)fichaCaptacao(a);return}
   if(t.dataset.act==='anuncios'){const g=t.closest('.card')?.querySelector('.igual');if(g){g.hidden=!g.hidden;t.textContent=g.hidden?'Anúncio ▾':'Anúncio ▴'}return}
   if(t.dataset.tab){mostrar(t.dataset.tab);return}
   if(t.dataset.ir){irPara(t.dataset.ir);return}
