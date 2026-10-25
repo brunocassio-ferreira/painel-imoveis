@@ -98,10 +98,11 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
 <header>
   <div class="top">
     <b>Agenciamento POA</b><span id="info">carregando…</span><span id="sync"></span>
+    <button class="ico" id="btnSaude" hidden title="Ver aviso de coleta incompleta" style="color:#FDB022">⚠</button>
     <button class="ico" id="btnReload" title="Recarregar dados">↻</button>
     <button class="ico" id="btnCfg" title="Conexão">⚙</button>
   </div>
-  <div id="saude" hidden style="background:#B42318;color:#fff;padding:6px 16px;font-size:13px"></div>
+  <div id="saude" hidden style="background:#B42318;color:#fff;padding:6px 16px;font-size:13px;display:none;gap:12px;align-items:flex-start"><span id="saudeTx" style="flex:1"></span><button id="saudeX" title="Fechar aviso (volta se a coleta falhar de novo)" style="border:0;background:none;color:#fff;font-size:18px;line-height:1;cursor:pointer;padding:0 2px">✕</button></div>
   <nav>
     <button data-tab="anuncios" class="on">Anúncios</button>
     <button data-tab="predios">Prédios</button>
@@ -289,7 +290,7 @@ const RESPOSTAS=[
 let cfg=LS.get('painel_cfg',{}), modo='', DATA={anuncios:[],gerado_em:''}, CRM=novoCrm(), crmSha=null;
 let ITB=null, IFI=Object.assign({per:'365',tipos:['Apartamento','Cobertura','Flat','Casa','Casa em condomínio'],escopo:'alvo',ord:'n',lim:40},LS.get('painel_ifiltros',{}));
 let PRED={predios:[],ruas:[],gerado_em:''}, PF=Object.assign(predFiltroPadrao(),LS.get('painel_pfiltros',{})), plimite=30, pmapa=null, pcamadas=null, ROTA=new Set(LS.get('painel_rota',[]));
-let ADS=[], NIMOV=0, MED={}, F=normF(LS.get('painel_filtros',null)), OPC={fonte:[],tipo:[]}, limite=40, mapa=null, camadas=null;
+let SAUDE='', ADS=[], NIMOV=0, MED={}, F=normF(LS.get('painel_filtros',null)), OPC={fonte:[],tipo:[]}, limite=40, mapa=null, camadas=null;
 const HOJE=new Date(), HOJE_ISO=isoLocal(HOJE);
 
 function novoCrm(){return {leads:{},extras:{},predios:{},predios_extra:{},config:{},modelos:null}}
@@ -426,8 +427,10 @@ function preparar(){
   $('#info').textContent=`${DATA.anuncios.length} anúncios · dados de ${DATA.gerado_em?DATA.gerado_em.replace('T',' ').slice(0,16).split(' ').map((p,i)=>i?p:br(p)).join(' '):'?'} · ${modo==='github'?'GitHub privado':'só neste aparelho'}`;
   OPC.fonte=[...new Set(ADS.map(a=>a.fonte))].sort();
   // fonte com problema na ultima rodada (site pulado, falha, sem coleta): aviso no topo para nao passar despercebido
-  const sd=DATA.saude,al=(sd&&sd.alertas)||[];$('#saude').hidden=!al.length;
-  if(al.length)$('#saude').innerHTML=`<b>Atenção, coleta incompleta na rodada ${esc(sd.rodada)} de ${esc(br(sd.quando.slice(0,10)))} ${esc(sd.quando.slice(11,16))}:</b> `+al.map(esc).join(' · ')+'. Imóveis desses sites podem estar faltando.';
+  // fechar guarda a assinatura do aviso; se a proxima rodada trouxer outro alerta, a faixa volta sozinha
+  const sd=DATA.saude,al=(sd&&sd.alertas)||[];SAUDE=al.length?(sd.rodada+'|'+sd.quando+'|'+al.join('|')):'';
+  if(al.length)$('#saudeTx').innerHTML=`<b>Atenção, coleta incompleta na rodada ${esc(sd.rodada)} de ${esc(br(sd.quando.slice(0,10)))} ${esc(sd.quando.slice(11,16))}:</b> `+al.map(esc).join(' · ')+'. Imóveis desses sites podem estar faltando.';
+  mostrarSaude(SAUDE&&LS.get('saudeFechada','')!==SAUDE);
   OPC.tipo=[...new Set(ADS.map(a=>a.tipo||'não informado'))].sort();
   prepararPredios();
 }
@@ -1345,6 +1348,10 @@ $('#fTexto').addEventListener('input',()=>{clearTimeout(window._ft);window._ft=s
 $('#fJanela2').onchange=e=>{F.janela=e.target.checked;LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};
 $('#btnLimpar').onclick=$('#btnLimpar2').onclick=()=>{F=filtrosPadrao();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};
 $('#btnMais').onclick=()=>{limite+=40;renderLista()};
+function mostrarSaude(aberta){$('#saude').hidden=!aberta;$('#saude').style.display=aberta?'flex':'none';
+  $('#btnSaude').hidden=!SAUDE||aberta;$('#btnSaude').title=SAUDE?$('#saudeTx').textContent:'';}
+$('#saudeX').onclick=()=>{LS.set('saudeFechada',SAUDE);mostrarSaude(false)};
+$('#btnSaude').onclick=()=>{LS.del('saudeFechada');mostrarSaude(true)};
 $('#btnReload').onclick=carregar;$('#btnCfg').onclick=()=>abrirSetup('');
 $('#mMetrica').onchange=renderMapa;
 $('#sSalvar').onclick=async()=>{cfg={owner:$('#sOwner').value.trim(),repo:$('#sRepo').value.trim(),token:$('#sToken').value.trim()||cfg.token};
