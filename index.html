@@ -151,14 +151,14 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
           <label>m² máx.<input id="fAmax" type="number" inputmode="numeric"></label>
           <label class="ck"><input type="checkbox" id="fMulti"> Em 2 ou mais sites</label>
           <label class="ck"><input type="checkbox" id="fQueda"> Baixou o preço</label>
-          <label class="ck"><input type="checkbox" id="fJanela"> Só últimos 14 dias (publicados ou que entraram no radar; sem estoque antigo)</label>
+          <label class="ck"><input type="checkbox" id="fJanela"> Só novos de verdade (1ª aparição do imóvel nos últimos 14 dias, sem republicação nem estoque)</label>
           <label class="ck"><input type="checkbox" id="fSemBase"> Esconder estoque inicial</label>
           <label class="ck" hidden><input type="checkbox" id="fMaduro"> Proprietário há 45+ dias no ar</label>
         </div>
       </details>
       <div class="bar"><button class="btn" id="btnLimpar">Limpar filtros</button></div>
     </details>
-    <div class="bar"><span id="contagem" class="grow mut"></span><label class="ck"><input type="checkbox" id="fJanela2"> Só últimos 14 dias</label><button class="btn" id="btnLimpar2" hidden>Limpar</button><button class="btn" id="btnPdf" title="Abre a lista filtrada pronta para salvar em PDF ou imprimir">PDF da lista</button><button class="btn" id="btnManual">+ Imóvel manual</button></div>
+    <div class="bar"><span id="contagem" class="grow mut"></span><label class="ck"><input type="checkbox" id="fJanela2"> Só novos de verdade</label><button class="btn" id="btnLimpar2" hidden>Limpar</button><button class="btn" id="btnPdf" title="Abre a lista filtrada pronta para salvar em PDF ou imprimir">PDF da lista</button><button class="btn" id="btnManual">+ Imóvel manual</button></div>
     <div id="lista"></div>
     <div class="bar"><button class="btn" id="btnMais" hidden>Mostrar mais</button></div>
   </section>
@@ -294,7 +294,7 @@ let SAUDE='', ADS=[], NIMOV=0, MED={}, F=normF(LS.get('painel_filtros',null)), O
 const HOJE=new Date(), HOJE_ISO=isoLocal(HOJE);
 
 function novoCrm(){return {leads:{},extras:{},predios:{},predios_extra:{},config:{},modelos:null}}
-function filtrosPadrao(){return {periodo:'',origem:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:[],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',lev:'',multi:false,unico:false,queda:false,semBase:false,maduro:false,janela:true,novos:false,lanc:false}}
+function filtrosPadrao(){return {periodo:'',origem:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:[],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',lev:'',multi:false,unico:false,queda:false,semBase:false,maduro:false,janela:true,novos:false,lanc:false,agenc:false}}
 // filtros salvos antes da escolha multipla guardavam texto simples em site, tipo, status e quartos
 function normF(f){f={...filtrosPadrao(),...(f||{}),maduro:false};for(const k of ['bairros','fonte','tipo','status','qts'])if(!Array.isArray(f[k]))f[k]=f[k]?[f[k]]:[];
   f.status=f.status.filter(k=>['checando','agenciado','descartado'].includes(k));return f}
@@ -406,7 +406,7 @@ function preparar(){
     entrada:a.levantamento||(a.visto?a.visto.slice(0,10)+' 00:00':'')}});
   // novidade = entrou no radar nas ultimas 2 semanas (com data de publicacao ou nao); "para conferir" = entrou depois da ultima conferencia
   const ca=conferidoAte();
-  for(const a of ADS){a.novoRadar=!a.base_inicial&&dias(a.visto)<=JANELA;a.conferir=!a.base_inicial&&!a.manual&&a.entrada>ca}
+  for(const a of ADS){a.novoRadar=!a.base_inicial&&!a.republicado&&dias(a.visto)<=JANELA;a.conferir=!a.base_inicial&&!a.republicado&&!a.manual&&a.entrada>ca}
   // maduro: proprietario com data real de publicacao, no ar ha 45 dias ou mais e visto nas ultimas 2 semanas
   for(const a of ADS)a.maduro=a.proprietario&&!!a.publicado&&a.idade>=MADURO&&dias(a.ultima||a.visto)<=14;
   MED={};for(const [b] of BAIRROS)MED[b]=mediana(ADS.filter(a=>a.bairro===b&&a.pm2).map(a=>a.pm2));
@@ -444,7 +444,8 @@ function pontuar(a){let s=0;const r=[];
   if(a.idade<=1){s+=20;r.push('imóvel apareceu pela primeira vez hoje ou ontem (+20)')}else if(a.idade<=3){s+=15;r.push('primeira aparição há até 3 dias (+15)')}else if(a.idade<=7){s+=8;r.push('primeira aparição nesta semana (+8)')}
   if(a.pm2&&MED[a.bairro]&&a.pm2>MED[a.bairro]*1.15){s+=10;r.push('R$/m² 15% acima da mediana do bairro, abre conversa sobre avaliação (+10)')}
   if(a.preco>=1.5e6){s+=5;r.push('ticket a partir de R$ 1,5 mi (+5)')}
-  return [Math.min(100,s),r]}
+  if(a.republicador){s-=30;r.push(`${a.anunciante||a.fonte} republica o estoque em ciclo; anúncio novo dele raramente é imóvel novo (-30)`)}
+  return [Math.max(0,Math.min(100,s)),r]}
 const corScore=s=>s>=50?'#b23a3a':s>=30?'#d97706':s>=15?'#b08d1a':'#8a8a8a';
 
 /* ---------- filtros e lista ---------- */
@@ -455,9 +456,9 @@ function grupo(id,rot,k,ops){$('#'+id).innerHTML=`<b class="lbl">${rot}</b>`+ops
   `<span class="chip${F[k].includes(v)?' on':''}" data-g="${k}" data-v="${esc(v)}">${esc(t)}</span>`).join('')}
 const FAIXAS=[['','','Qualquer'],['500','800','500 a 800 mil'],['800','1500','800 mil a 1,5 mi'],['1500','3000','1,5 a 3 mi'],['3000','','Acima de 3 mi']];
 // atalhos de um toque: os recortes mais usados na rotina de agenciamento
-const ATALHOS=[['novos','Novos para conferir',f=>f.novos],['hoje','Publicados hoje (data confirmada)',f=>f.periodo==='0'&&f.origem==='conf'],['radar','Detectados hoje (sem data)',f=>f.periodo==='0'&&f.origem==='radar'],['prop','Proprietário direto',f=>f.anunc==='prop'],['pioneiros','Únicos de hoje (pioneiros)',f=>f.unico&&f.periodo==='0'],
+const ATALHOS=[['agenc','Agenciáveis (únicos, sem republicação)',f=>f.agenc],['novos','Novos para conferir',f=>f.novos],['hoje','Publicados hoje (data confirmada)',f=>f.periodo==='0'&&f.origem==='conf'],['radar','Detectados hoje (sem data)',f=>f.periodo==='0'&&f.origem==='radar'],['prop','Proprietário direto',f=>f.anunc==='prop'],['pioneiros','Únicos de hoje (pioneiros)',f=>f.unico&&f.periodo==='0'],
   ['queda','Baixou o preço',f=>f.queda],['unico','Só únicos (um site)',f=>f.unico],['multi','Em 2+ sites',f=>f.multi],['lanc','Lançamentos',f=>f.lanc]];
-function atalho(id){const A={novos:()=>F.novos=!F.novos,hoje:()=>{const on=F.periodo==='0'&&F.origem==='conf';F.periodo=on?'':'0';F.origem=on?'':'conf'},radar:()=>{const on=F.periodo==='0'&&F.origem==='radar';F.periodo=on?'':'0';F.origem=on?'':'radar'},prop:()=>F.anunc=F.anunc==='prop'?'':'prop',pioneiros:()=>{const on=F.unico&&F.periodo==='0';F.unico=!on;F.periodo=on?'':'0'},
+function atalho(id){const A={agenc:()=>F.agenc=!F.agenc,novos:()=>F.novos=!F.novos,hoje:()=>{const on=F.periodo==='0'&&F.origem==='conf';F.periodo=on?'':'0';F.origem=on?'':'conf'},radar:()=>{const on=F.periodo==='0'&&F.origem==='radar';F.periodo=on?'':'0';F.origem=on?'':'radar'},prop:()=>F.anunc=F.anunc==='prop'?'':'prop',pioneiros:()=>{const on=F.unico&&F.periodo==='0';F.unico=!on;F.periodo=on?'':'0'},
   queda:()=>F.queda=!F.queda,multi:()=>F.multi=!F.multi,unico:()=>F.unico=!F.unico,lanc:()=>F.lanc=!F.lanc};A[id]();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()}
 function montarFiltros(){
   $('#fPeriodo').innerHTML='<b class="lbl">Período</b>'+PERIODOS.map(([v,t])=>`<span class="chip${F.periodo===v?' on':''}" data-p="${v}">${t}</span>`).join('');
@@ -496,7 +497,9 @@ function filtrar(){
     if(F.origem==='conf'&&!a.conf)return false;
     if(F.origem==='radar'&&!a.radar)return false;
     if(F.semBase&&a.estoque)return false;
-    if(F.janela&&!F.maduro&&!F.novos&&!F.lanc&&!a.novoRadar&&(a.estoque||a.idade>JANELA))return false;
+    // 27/10: antes valia a entrada do anuncio no radar, e como o painel ja so traz 14 dias o filtro nao tirava nada
+    if(F.janela&&!F.maduro&&!F.lanc&&(a.estoque||a.republicado||a.idade>JANELA))return false;
+    if(F.agenc&&(a.outros.length||a.republicado||a.republicador||a.estoque||a.idade>JANELA))return false;
     if(F.novos&&!a.conferir)return false;
     if(F.maduro&&!a.maduro)return false;
     if(F.bairros.length&&!F.bairros.includes(a.bairro))return false;
@@ -540,6 +543,8 @@ function card(a){const L=lead(a.id);const tags=[];
   else if(a.conf&&a.idade<=3)tags.push('<span class="tag novo">NOVO</span>');
   else if(a.radar&&a.idade<=0)tags.push('<span class="tag rad">detectado hoje · sem data</span>');
   else if(a.radar&&a.idade<=3)tags.push('<span class="tag rad">detectado · sem data</span>');
+  if(a.republicado)tags.push(`<span class="tag est" title="O mesmo site já anunciou este imóvel com outro código (${esc({foto:'mesmas fotos',semelhante:'fotos semelhantes',dados:'mesmo anunciante, área, quartos e preço'}[a.republicado.como]||'')}). A data do card é a do anúncio anterior.">REPUBLICADO · desde ${esc(br(a.republicado.desde))}</span>`);
+  if(a.republicador)tags.push(`<span class="tag est" title="Este anunciante tira anúncios do ar e publica de novo com código novo">republicador</span>`);
   if(a.proprietario)tags.push('<span class="tag prop">proprietário</span>');
   if(a.outros.length)tags.push(`<span class="tag multi">${a.outros.length+1} sites</span>`);
   else if(!a.manual)tags.push('<span class="tag hoje" title="Nenhum outro site tem este imóvel (comparação pelas fotos). Provavelmente o anúncio pioneiro.">ÚNICO</span>');
@@ -971,6 +976,7 @@ const MANUAL_FILTROS=`<div class="panel"><h3>Manual de filtros: os anúncios mai
  <p class="mut">O painel mostra só imóveis cuja primeira aparição, em qualquer site, foi nos últimos 14 dias. O que já estava no ar antes fica guardado no histórico e serve para reconhecer republicações. A data de cada card é a do imóvel, não a do anúncio: um ZAP novo de um imóvel que a Lopes anuncia desde o dia 10 conta como dia 10.</p>
  <details class="box" open><summary><b>1. Rotina de cada atualização (3 vezes por dia)</b></summary><ol class="fluxo">
   <li><b>Atalho "Novos para conferir".</b> Traz o que entrou desde a última vez que você tocou em "Marquei como conferidos". Ordem "Mais recentes".</li>
+  <li><b>Atalho "Agenciáveis (únicos, sem republicação)".</b> Imóvel em um site só, fora da rede, sem republicação, de anunciante que não republica em ciclo e com 1ª aparição nos últimos 14 dias. É a lista de trabalho do dia a dia.</li>
   <li><b>Atalho "Únicos de hoje (pioneiros)".</b> Imóveis que apareceram hoje pela primeira vez e estão em um site só. É a lista de maior prioridade: provavelmente o primeiro anúncio, antes de o imóvel se espalhar.</li>
   <li><b>Atalho "Proprietário direto".</b> Anúncios do OLX confirmados como do próprio dono. O contato é pelo anúncio, sem imobiliária no meio.</li>
   <li>Em cada imóvel interessante: <b>Dono ▾</b> para ver prédio, síndico e vendas do ITBI; <b>Ficha</b> para o estudo de mercado em PDF; status <b>Checando</b> para não perder.</li>
@@ -990,11 +996,13 @@ const MANUAL_FILTROS=`<div class="panel"><h3>Manual de filtros: os anúncios mai
   <li><b>N sites:</b> o mesmo imóvel em vários sites; os outros links ficam em "Anúncio ▾".</li>
   <li><b>apareceu também em X:</b> imóvel que você já tinha visto, agora anunciado em mais um site. Não é novidade.</li>
   <li><b>1ª aparição do imóvel:</b> a data e o site pioneiro, com o link.</li>
+  <li><b>REPUBLICADO · desde:</b> o mesmo site já tinha anunciado esse imóvel com outro código (mesmas fotos ou mesmo anunciante, área e preço). Não é imóvel novo; a data do card é a do anúncio anterior.</li>
+  <li><b>republicador:</b> anunciante que tira e põe de volta o estoque em ciclo (ex.: Newcore no ZAP, toda segunda). Vai para o fim da fila pela nota.</li>
   <li><b>LANÇAMENTO?:</b> várias unidades iguais da mesma imobiliária; quem vende costuma ser a construtora.</li>
   <li><b>Faixa vermelha no topo:</b> algum site falhou na última rodada; imóveis dele podem estar faltando até a próxima.</li></ul></details>
  <details class="box"><summary><b>4. O que o painel já tira sozinho</b></summary><ul>
   <li>Auxiliadora, Foxter, Loft e Suder: pelo nome do anunciante e pelas fotos (a mesma foto, mesmo com a marca d'água de outro site, revela o imóvel da rede).</li>
-  <li>Republicações: imóvel já anunciado em outro site antes dos 14 dias, ou anúncio com código antigo.</li>
+  <li>Republicações: imóvel já anunciado em outro site antes dos 14 dias, anúncio com código antigo, ou o mesmo site publicando de novo com código novo (mesmas fotos, ou mesmo anunciante com área, quartos e preço iguais), mesmo que o anúncio anterior já tenha saído do ar.</li>
   <li>Descartados há mais de 14 dias. Sem nenhum status marcado no filtro, descartados e agenciados ficam escondidos; marque o status para vê-los.</li></ul></details>
 </div>`;
 function renderGuia(){
