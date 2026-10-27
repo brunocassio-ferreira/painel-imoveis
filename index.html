@@ -396,7 +396,8 @@ function leadMut(id){return CRM.leads[id]||(CRM.leads[id]={status:'novo',hist:[]
 function preparar(){
   for(const L of Object.values(CRM.leads||{}))L.status=stN(L.status);
   const extras=Object.values(CRM.extras||{}).filter(x=>!x.removido);
-  ADS=[...DATA.anuncios,...extras].map(a=>{const m2=num(a.area_m2);return {...a,outros:a.outros||[],m2,pm2:m2?a.preco/m2:0,rec:a.primeira||a.publicado||a.visto,
+  ADS=[...DATA.anuncios,...extras].map(a=>{const m2=num(a.area_m2)>=15?num(a.area_m2):0;   // area abaixo de 15 m2 e erro do site (27/10: casa com 1 m2), vale como nao informada
+    return {...a,area_m2:m2?a.area_m2:'',outros:a.outros||[],m2,pm2:m2?a.preco/m2:0,rec:a.primeira||a.publicado||a.visto,
     idade:dias(a.primeira||a.publicado||a.visto),estoque:a.base_inicial&&!a.publicado,conf:!!a.publicado,radar:!a.publicado&&!a.base_inicial,
     entrada:a.levantamento||(a.visto?a.visto.slice(0,10)+' 00:00':'')}});
   // novidade = entrou no radar nas ultimas 2 semanas (com data de publicacao ou nao); "para conferir" = entrou depois da ultima conferencia
