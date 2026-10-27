@@ -120,10 +120,10 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
 <main>
   <section id="tab-anuncios">
     <div class="box" id="barraRapida">
-      <div class="chips" id="fAtalhos" style="margin-top:0"></div>
+      <div class="chips visoes" id="fVisao" style="margin-top:0"></div>
+      <p class="mut" id="fVisaoTxt" style="margin:4px 0 8px"></p>
       <div class="fgrid2">
         <input id="fTexto" placeholder="Buscar por rua, código ou site">
-        <select id="fLev" aria-label="Levantamento"><option value="">Todos os levantamentos</option></select>
         <select id="fOrdem" aria-label="Ordenar">
           <option value="rec">Mais recentes</option><option value="score">Maior oportunidade</option>
           <option value="pdesc">Maior preço</option><option value="pasc">Menor preço</option>
@@ -132,33 +132,28 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
     </div>
     <details class="box" id="boxFiltros">
       <summary>Filtrar <span id="resumoF" class="mut"></span></summary>
-      <p class="mut" style="margin:6px 0 0">Em cada linha dá para marcar vários; sem marcar vale como todos.</p>
-      <div class="chips" id="fPeriodo"></div>
-      <div class="chips" id="fOrigem"></div>
+      <p class="mut" style="margin:6px 0 0">Recortam a visão escolhida acima. Em cada linha dá para marcar vários; sem marcar vale como todos.</p>
       <div class="chips" id="fBairros"></div>
       <div class="chips" id="fPreco"></div>
       <div class="chips" id="fQts"></div>
+      <div class="chips" id="fTipo"></div>
       <details class="mais">
         <summary>Mais filtros</summary>
         <div class="chips" id="fStatus"></div>
         <div class="chips" id="fFonte"></div>
-        <div class="chips" id="fTipo"></div>
         <div class="fgrid">
           <label>Anunciante<select id="fAnunc"><option value="">Todos</option><option value="prop">Proprietário direto</option><option value="imob">Imobiliária ou corretor</option></select></label>
           <label>Preço mín. (mil)<input id="fPmin" type="number" inputmode="numeric"></label>
           <label>Preço máx. (mil)<input id="fPmax" type="number" inputmode="numeric"></label>
           <label>m² mín.<input id="fAmin" type="number" inputmode="numeric"></label>
           <label>m² máx.<input id="fAmax" type="number" inputmode="numeric"></label>
-          <label class="ck"><input type="checkbox" id="fMulti"> Em 2 ou mais sites</label>
+          <label class="ck"><input type="checkbox" id="fUnico"> Só em um site</label>
           <label class="ck"><input type="checkbox" id="fQueda"> Baixou o preço</label>
-          <label class="ck"><input type="checkbox" id="fJanela"> Só novos de verdade (1ª aparição do imóvel nos últimos 14 dias, sem republicação nem estoque)</label>
-          <label class="ck"><input type="checkbox" id="fSemBase"> Esconder estoque inicial</label>
-          <label class="ck" hidden><input type="checkbox" id="fMaduro"> Proprietário há 45+ dias no ar</label>
         </div>
       </details>
       <div class="bar"><button class="btn" id="btnLimpar">Limpar filtros</button></div>
     </details>
-    <div class="bar"><span id="contagem" class="grow mut"></span><label class="ck"><input type="checkbox" id="fJanela2"> Só novos de verdade</label><button class="btn" id="btnLimpar2" hidden>Limpar</button><button class="btn" id="btnPdf" title="Abre a lista filtrada pronta para salvar em PDF ou imprimir">PDF da lista</button><button class="btn" id="btnManual">+ Imóvel manual</button></div>
+    <div class="bar"><span id="contagem" class="grow mut"></span><button class="btn" id="btnLimpar2" hidden>Limpar</button><button class="btn" id="btnPdf" title="Abre a lista filtrada pronta para salvar em PDF ou imprimir">PDF da lista</button><button class="btn" id="btnManual">+ Imóvel manual</button></div>
     <div id="lista"></div>
     <div class="bar"><button class="btn" id="btnMais" hidden>Mostrar mais</button></div>
   </section>
@@ -294,9 +289,9 @@ let SAUDE='', ADS=[], NIMOV=0, MED={}, F=normF(LS.get('painel_filtros',null)), O
 const HOJE=new Date(), HOJE_ISO=isoLocal(HOJE);
 
 function novoCrm(){return {leads:{},extras:{},predios:{},predios_extra:{},config:{},modelos:null}}
-function filtrosPadrao(){return {periodo:'',origem:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:[],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',lev:'',multi:false,unico:false,queda:false,semBase:false,maduro:false,janela:true,novos:false,lanc:false,agenc:false}}
+function filtrosPadrao(){return {v:2,visao:'novos',periodo:'',origem:'',bairros:[],texto:'',anunc:'',fonte:[],tipo:[],status:[],pmin:'',pmax:'',amin:'',amax:'',qts:[],ordem:'rec',lev:'',multi:false,unico:false,queda:false,semBase:false,maduro:false,janela:false,novos:false,lanc:false,agenc:false}}
 // filtros salvos antes da escolha multipla guardavam texto simples em site, tipo, status e quartos
-function normF(f){f={...filtrosPadrao(),...(f||{}),maduro:false};for(const k of ['bairros','fonte','tipo','status','qts'])if(!Array.isArray(f[k]))f[k]=f[k]?[f[k]]:[];
+function normF(f){if(!f||f.v!==2)f=null;f={...filtrosPadrao(),...(f||{}),maduro:false,periodo:'',origem:'',lev:'',janela:false,semBase:false,multi:false,novos:false,agenc:false,lanc:false};for(const k of ['bairros','fonte','tipo','status','qts'])if(!Array.isArray(f[k]))f[k]=f[k]?[f[k]]:[];
   f.status=f.status.filter(k=>['checando','agenciado','descartado'].includes(k));return f}
 function isoLocal(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`}
 function somaDias(n){const d=new Date();d.setDate(d.getDate()+n);return isoLocal(d)}
@@ -449,20 +444,19 @@ function pontuar(a){let s=0;const r=[];
 const corScore=s=>s>=50?'#b23a3a':s>=30?'#d97706':s>=15?'#b08d1a':'#8a8a8a';
 
 /* ---------- filtros e lista ---------- */
-const CHECKS={fMulti:'multi',fQueda:'queda',fSemBase:'semBase',fMaduro:'maduro',fJanela:'janela'};
-const ORIGENS=[['','Todas'],['conf','Publicação confirmada'],['radar','Detectado pelo radar, sem data']];
-const CAMPOS={fTexto:'texto',fAnunc:'anunc',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fOrdem:'ordem',fLev:'lev'};
+const CHECKS={fUnico:'unico',fQueda:'queda'};
+const CAMPOS={fTexto:'texto',fAnunc:'anunc',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fOrdem:'ordem'};
 function grupo(id,rot,k,ops){$('#'+id).innerHTML=`<b class="lbl">${rot}</b>`+ops.map(([v,t])=>
   `<span class="chip${F[k].includes(v)?' on':''}" data-g="${k}" data-v="${esc(v)}">${esc(t)}</span>`).join('')}
 const FAIXAS=[['','','Qualquer'],['500','800','500 a 800 mil'],['800','1500','800 mil a 1,5 mi'],['1500','3000','1,5 a 3 mi'],['3000','','Acima de 3 mi']];
-// atalhos de um toque: os recortes mais usados na rotina de agenciamento
-const ATALHOS=[['agenc','Agenciáveis (únicos, sem republicação)',f=>f.agenc],['novos','Novos para conferir',f=>f.novos],['hoje','Publicados hoje (data confirmada)',f=>f.periodo==='0'&&f.origem==='conf'],['radar','Detectados hoje (sem data)',f=>f.periodo==='0'&&f.origem==='radar'],['prop','Proprietário direto',f=>f.anunc==='prop'],['pioneiros','Únicos de hoje (pioneiros)',f=>f.unico&&f.periodo==='0'],
-  ['queda','Baixou o preço',f=>f.queda],['unico','Só únicos (um site)',f=>f.unico],['multi','Em 2+ sites',f=>f.multi],['lanc','Lançamentos',f=>f.lanc]];
-function atalho(id){const A={agenc:()=>F.agenc=!F.agenc,novos:()=>F.novos=!F.novos,hoje:()=>{const on=F.periodo==='0'&&F.origem==='conf';F.periodo=on?'':'0';F.origem=on?'':'conf'},radar:()=>{const on=F.periodo==='0'&&F.origem==='radar';F.periodo=on?'':'0';F.origem=on?'':'radar'},prop:()=>F.anunc=F.anunc==='prop'?'':'prop',pioneiros:()=>{const on=F.unico&&F.periodo==='0';F.unico=!on;F.periodo=on?'':'0'},
-  queda:()=>F.queda=!F.queda,multi:()=>F.multi=!F.multi,unico:()=>F.unico=!F.unico,lanc:()=>F.lanc=!F.lanc};A[id]();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()}
+// 27/10, pedido de Bruno ("filtros demais que se sobrepoem"): tres visoes no lugar de atalhos, periodo, data, levantamento e
+// "14 dias". Imovel novo = 1a aparicao recente em qualquer site, sem republicacao, fora de republicador e de estoque (a rede ja sai
+// antes, no exportar_painel). Em 2 sites fora da rede tambem serve; o de um site so ganha nota maior
+const novoDeVerdade=a=>!a.republicado&&!a.republicador&&!a.estoque;
+const VISOES=[['novos','Novos (hoje e ontem)',a=>novoDeVerdade(a)&&a.idade<=1,'Imóveis que apareceram pela primeira vez hoje ou ontem, em qualquer site fora da rede, sem republicação. É a lista do dia.'],
+  ['14','Últimos 14 dias',a=>novoDeVerdade(a)&&a.idade<=JANELA,'A mesma regra para os últimos 14 dias. Serve para retomar o que ficou para trás.'],
+  ['tudo','Tudo',a=>true,'Tudo o que está no painel, inclusive republicados, anunciantes que republicam em ciclo, descartados e agenciados. Para consulta.']];
 function montarFiltros(){
-  $('#fPeriodo').innerHTML='<b class="lbl">Período</b>'+PERIODOS.map(([v,t])=>`<span class="chip${F.periodo===v?' on':''}" data-p="${v}">${t}</span>`).join('');
-  $('#fOrigem').innerHTML='<b class="lbl">Data</b>'+ORIGENS.map(([v,t])=>`<span class="chip${F.origem===v?' on':''}" data-o="${v}">${t}</span>`).join('');
   grupo('fBairros','Bairro','bairros',BAIRROS.map(([b])=>[b,b]));
   $('#fBairros .lbl').insertAdjacentHTML('afterend',ZONAS.map(z=>{const bs=BAIRROS.filter(x=>x[4]===z).map(x=>x[0]);const on=bs.every(b=>F.bairros.includes(b));
     return `<span class="chip${on?' on':''}" data-zona="${esc(z)}" style="font-weight:700">${esc(z)} (${bs.length})</span>`}).join(''));
@@ -472,15 +466,12 @@ function montarFiltros(){
   grupo('fTipo','Tipo','tipo',OPC.tipo.map(t=>[t,t]));
   grupo('fQts','Quartos','qts',[['1','1'],['2','2'],['3','3'],['4','4 ou mais']]);
   $('#fPreco').innerHTML='<b class="lbl">Preço</b>'+FAIXAS.map(([mn,mx,t])=>`<span class="chip${String(F.pmin)===mn&&String(F.pmax)===mx?' on':''}" data-band="${mn}|${mx}">${t}</span>`).join('');
-  const nConf=contarNovos();
-  $('#fAtalhos').innerHTML=ATALHOS.map(([id,t,on])=>`<span class="chip${on(F)?' on':''}" data-at="${id}">${id==='novos'?`${t} (${nConf})`:t}</span>`).join('');
-  const levs=[...new Set(ADS.map(a=>a.levantamento).filter(Boolean))].sort().reverse().slice(0,15);
-  if(F.lev&&!levs.includes(F.lev))levs.push(F.lev);
-  $('#fLev').innerHTML='<option value="">Todos os levantamentos</option>'+levs.map(l=>`<option value="${esc(l)}">${esc(levRot(l,(ADS.find(a=>a.levantamento===l)||{}).lev_tipo))}</option>`).join('');
+  const vivo=a=>!['descartado','agenciado'].includes(lead(comLead(a).id).status);
+  $('#fVisao').innerHTML=VISOES.map(([id,t,f])=>`<span class="chip${F.visao===id?' on':''}" data-visao="${id}" style="font-weight:700">${t} (${new Set(ADS.filter(a=>f(a)&&(id==='tudo'||vivo(a))).map(a=>a.gid)).size})</span>`).join('');
+  $('#fVisaoTxt').textContent=(VISOES.find(v=>v[0]===F.visao)||VISOES[0])[3];
   const m=CAMPOS;
   for(const [id,k] of Object.entries(m))$('#'+id).value=F[k]??'';
   for(const [id,k] of Object.entries(CHECKS))$('#'+id).checked=F[k];
-  $('#fJanela2').checked=F.janela;
 }
 function alternar(k,v){let s=F[k].includes(v)?F[k].filter(x=>x!==v):[...F[k],v];
   F[k]=s;LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()}
@@ -492,14 +483,13 @@ const LEVT={leve:'leve',completa:'completa',monitor:'monitor',avulso:'avulso'};
 function levRot(l,tipo){if(!l)return '';const [d,h]=l.split(' ');return `${d===HOJE_ISO?'hoje':br(d)} ${h}${tipo?' · '+(LEVT[tipo]||tipo):''}`}
 function filtrar(){
   const t=F.texto.trim().toLowerCase();
+  const vis=(VISOES.find(v=>v[0]===F.visao)||VISOES[0])[2];
   let r=ADS.filter(a=>{const L=lead(comLead(a).id);
+    if(!vis(a))return false;
     if(F.periodo!==''&&(a.estoque||a.idade>+F.periodo))return false;
     if(F.origem==='conf'&&!a.conf)return false;
     if(F.origem==='radar'&&!a.radar)return false;
     if(F.semBase&&a.estoque)return false;
-    // 27/10: antes valia a entrada do anuncio no radar, e como o painel ja so traz 14 dias o filtro nao tirava nada
-    if(F.janela&&!F.maduro&&!F.lanc&&(a.estoque||a.republicado||a.idade>JANELA))return false;
-    if(F.agenc&&(a.outros.length||a.republicado||a.republicador||a.estoque||a.idade>JANELA))return false;
     if(F.novos&&!a.conferir)return false;
     if(F.maduro&&!a.maduro)return false;
     if(F.bairros.length&&!F.bairros.includes(a.bairro))return false;
@@ -507,7 +497,7 @@ function filtrar(){
     if(F.anunc==='imob'&&a.proprietario)return false;
     if(F.fonte.length&&!F.fonte.includes(a.fonte))return false;
     if(F.tipo.length&&!F.tipo.includes(a.tipo||'não informado'))return false;
-    if(F.status.length?!F.status.includes(L.status):['descartado','agenciado'].includes(L.status))return false;
+    if(F.status.length?!F.status.includes(L.status):F.visao!=='tudo'&&['descartado','agenciado'].includes(L.status))return false;
     if(F.pmin&&a.preco<F.pmin*1000)return false;
     if(F.pmax&&a.preco>F.pmax*1000)return false;
     if(F.amin&&(!a.m2||a.m2<+F.amin))return false;
@@ -524,15 +514,15 @@ function filtrar(){
     pdesc:(a,b)=>b.preco-a.preco,pasc:(a,b)=>a.preco-b.preco,m2asc:(a,b)=>(a.pm2||1e9)-(b.pm2||1e9),m2desc:(a,b)=>b.pm2-a.pm2}[F.ordem]||(()=>0);
   return r.sort(ord)}
 function renderLista(){
-  const todos=filtrar(),P=filtrosPadrao();const ativos=Object.keys(P).filter(k=>k!=='ordem'&&JSON.stringify(F[k])!==JSON.stringify(P[k])).length;
+  const todos=filtrar(),P=filtrosPadrao();const ativos=Object.keys(P).filter(k=>k!=='ordem'&&k!=='visao'&&JSON.stringify(F[k])!==JSON.stringify(P[k])).length;
   // um card por imovel: fica a posicao do melhor anuncio do grupo, com o anuncio que guarda o seu CRM quando houver
   const porG={},r=[];for(const a of todos)(porG[a.gid]=porG[a.gid]||[]).push(a);
   for(const a of todos){const m=porG[a.gid];if(!m)continue;delete porG[a.gid];r.push(m.find(o=>CRM.leads[o.id])||a)}
   $('#resumoF').textContent=ativos?`(${ativos} ativos)`:'';
   const nConf=contarNovos();
-  $('#contagem').innerHTML=`${r.length} de ${NIMOV} imóveis`+(todos.length>r.length?` (${todos.length} anúncios; os repetidos em outros sites ficam dentro do card)`:'')+(nConf?` · <a href="#" id="lnkNovos" style="color:#d62828;font-weight:700">${nConf} novos para conferir</a> <button class="btn" id="btnConferi" title="Tudo que entrou no radar até agora deixa de aparecer como novo">Marquei como conferidos</button>`:` · nada novo desde ${esc(levRot(conferidoAte()))}`);
+  $('#contagem').innerHTML=`${r.length} de ${NIMOV} imóveis`+(todos.length>r.length?` (${todos.length} anúncios; os repetidos em outros sites ficam dentro do card)`:'')+(nConf?` · <a href="#" id="lnkNovos" style="color:#d62828;font-weight:700">${nConf} chegaram desde a sua última conferência</a> <button class="btn" id="btnConferi" title="Tudo que entrou no radar até agora deixa de aparecer como novo">Marquei como conferidos</button>`:` · nada novo desde ${esc(levRot(conferidoAte()))}`);
   $('#btnLimpar2').hidden=!ativos;
-  if(nConf){$('#lnkNovos').onclick=e=>{e.preventDefault();F={...filtrosPadrao(),novos:true};LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};$('#btnConferi').onclick=marcarConferido}
+  if(nConf){$('#lnkNovos').onclick=e=>{e.preventDefault();F={...filtrosPadrao(),visao:'novos',ordem:'rec'};LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};$('#btnConferi').onclick=marcarConferido}
   $('#lista').innerHTML=r.slice(0,limite).map(card).join('')||'<p class="mut">Nenhum anúncio com esses filtros.</p>';
   $('#btnMais').hidden=r.length<=limite}
 function card(a){const L=lead(a.id);const tags=[];
@@ -972,24 +962,22 @@ const FLUXO_CAIXA=[
  ['Registro','Registro de Imóveis; o banco envia eletronicamente ou o comprador leva o contrato.'],
  ['Liberação do dinheiro','Banco paga o vendedor (financiamento + FGTS) depois do registro. Se a comissão estiver atrelada ao recebimento, sai aqui.']];
 // manual de filtros (pedido de Bruno, 24/10): como chegar aos anuncios mais recentes, com o anuncio pioneiro em primeiro lugar
-const MANUAL_FILTROS=`<div class="panel"><h3>Manual de filtros: os anúncios mais recentes primeiro</h3>
+const MANUAL_FILTROS=`<div class="panel"><h3>Manual: como chegar aos imóveis novos</h3>
  <p class="mut">O painel mostra só imóveis cuja primeira aparição, em qualquer site, foi nos últimos 14 dias. O que já estava no ar antes fica guardado no histórico e serve para reconhecer republicações. A data de cada card é a do imóvel, não a do anúncio: um ZAP novo de um imóvel que a Lopes anuncia desde o dia 10 conta como dia 10.</p>
  <details class="box" open><summary><b>1. Rotina de cada atualização (3 vezes por dia)</b></summary><ol class="fluxo">
-  <li><b>Atalho "Novos para conferir".</b> Traz o que entrou desde a última vez que você tocou em "Marquei como conferidos". Ordem "Mais recentes".</li>
-  <li><b>Atalho "Agenciáveis (únicos, sem republicação)".</b> Imóvel em um site só, fora da rede, sem republicação, de anunciante que não republica em ciclo e com 1ª aparição nos últimos 14 dias. É a lista de trabalho do dia a dia.</li>
-  <li><b>Atalho "Únicos de hoje (pioneiros)".</b> Imóveis que apareceram hoje pela primeira vez e estão em um site só. É a lista de maior prioridade: provavelmente o primeiro anúncio, antes de o imóvel se espalhar.</li>
-  <li><b>Atalho "Proprietário direto".</b> Anúncios do OLX confirmados como do próprio dono. O contato é pelo anúncio, sem imobiliária no meio.</li>
+  <li><b>Abra em "Novos (hoje e ontem)".</b> É a visão que o painel já abre. Traz os imóveis que apareceram pela primeira vez hoje ou ontem, em qualquer site fora da rede, sem republicação. Os de um site só têm nota maior.</li>
+  <li><b>Comece pelo topo.</b> A ordem "Mais recentes" põe primeiro o que chegou na última rodada (etiqueta NOVO NO RADAR). Se preferir pela chance de agenciar, troque para "Maior oportunidade".</li>
   <li>Em cada imóvel interessante: <b>Dono ▾</b> para ver prédio, síndico e vendas do ITBI; <b>Ficha</b> para o estudo de mercado em PDF; status <b>Checando</b> para não perder.</li>
-  <li>No fim, <b>"Marquei como conferidos"</b>. Na próxima atualização, só o que for novo aparece no atalho.</li></ol>
-  <p class="mut">O horário da última atualização aparece no topo. As rodadas começam às 8:40, 12:40 e 18:40 e publicam cerca de uma hora e meia depois; a de madrugada atualiza tudo antes das 9h.</p></details>
- <details class="box"><summary><b>2. Combinações que funcionam melhor</b></summary><ul>
-  <li><b>Pioneiros da semana:</b> "Só únicos (um site)" + Período "7 dias" + ordem "Mais recentes".</li>
-  <li><b>Pioneiros por região:</b> Bairro, toque em "Zona Sul", "Azenha" ou "Centro-Norte" para marcar a região inteira de uma vez, + "Só únicos".</li>
-  <li><b>Data garantida:</b> Data "Publicação confirmada". Só anúncios cujo site informa o dia da publicação (ZAP, OLX, QuintoAndar e alguns outros).</li>
-  <li><b>Sites sem data:</b> Data "Detectado pelo radar, sem data". Crédito Real, Colnaghi, Chaves na Mão e as imobiliárias pequenas não informam o dia; vale a primeira vez que o radar viu o imóvel. O código do anúncio é conferido: se ele é antigo, o card mostra a data provável real.</li>
-  <li><b>O que uma rodada trouxe:</b> escolha a rodada em "Todos os levantamentos" (ex.: "leve 12:40") para ver exatamente o que ela encontrou.</li>
-  <li><b>Dono flexível:</b> "Baixou o preço". Quem já baixou costuma ouvir uma proposta de avaliação.</li>
-  <li><b>Melhor oportunidade do dia:</b> ordem "Maior oportunidade". A nota soma: único (+25), primeira aparição hoje ou ontem (+20), proprietário direto (+30), baixou o preço (+15), R$/m² acima da mediana do bairro (+10), ticket de R$ 1,5 mi ou mais (+5). Toque na nota para ver o motivo.</li></ul></details>
+  <li>No fim, <b>"Marquei como conferidos"</b>. Na próxima rodada, a etiqueta NOVO NO RADAR fica só no que chegar depois.</li></ol>
+  <p class="mut">As rodadas começam às 8:40, 12:40 e 18:40 e publicam cerca de uma hora depois; a da madrugada atualiza tudo antes das 9h. O horário da última atualização aparece no topo.</p></details>
+ <details class="box"><summary><b>2. As três visões e os filtros</b></summary><ul>
+  <li><b>Novos (hoje e ontem):</b> a lista do dia.</li>
+  <li><b>Últimos 14 dias:</b> a mesma regra para duas semanas, para retomar o que ficou para trás.</li>
+  <li><b>Tudo:</b> consulta. Inclui republicados, anunciantes que republicam em ciclo, descartados e agenciados.</li>
+  <li><b>Filtrar</b> (bairro, preço, quartos, tipo) recorta a visão escolhida. Para marcar uma região inteira, toque em "Zona Sul", "Azenha" ou "Centro-Norte".</li>
+  <li><b>Mais filtros:</b> status, site, proprietário direto, metragem, "Só em um site" e "Baixou o preço" (quem já baixou costuma ouvir uma proposta de avaliação).</li>
+  <li><b>Ordem "Maior oportunidade":</b> a nota soma único (+25), primeira aparição hoje ou ontem (+20), proprietário direto (+30), baixou o preço (+15), R$/m² acima da mediana do bairro (+10), ticket de R$ 1,5 mi ou mais (+5) e tira 30 de quem republica em ciclo. Toque na nota para ver o motivo.</li>
+  <li>"Limpar" tira os filtros e mantém a visão em que você está.</li></ul></details>
  <details class="box"><summary><b>3. O que cada etiqueta quer dizer</b></summary><ul>
   <li><b>NOVO NO RADAR:</b> entrou depois da sua última conferência.</li>
   <li><b>ÚNICO:</b> nenhum outro site tem esse imóvel. A comparação é pelas fotos, não só por área e preço.</li>
@@ -1299,9 +1287,9 @@ document.addEventListener('input',e=>{if(e.target.id==='imTexto'){IMF.texto=e.ta
 function renderTudo(){montarFiltros();renderLista();const ab=$('nav button.on').dataset.tab;if(ab!=='anuncios')mostrar(ab)}
 function mostrar(tab){$$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));$$('main>section').forEach(s=>s.hidden=s.id!=='tab-'+tab);
   if(tab==='anuncios')renderLista();if(tab==='predios'){montarFiltrosP();renderPredios()}if(tab==='vitrine')renderVitrine();if(tab==='imobiliarias')renderImobiliarias();if(tab==='itbi')renderItbi();if(tab==='acoes')renderAcoes();if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();if(tab==='guia')renderGuia();window.scrollTo(0,0)}
-function irPara(id){F=filtrosPadrao();F.status=[];LS.set('painel_filtros',F);mostrar('anuncios');montarFiltros();
+function irPara(id){F=filtrosPadrao();F.visao='tudo';F.status=[];LS.set('painel_filtros',F);mostrar('anuncios');montarFiltros();
   const a=ADS.find(x=>x.id===id);if(!a)return;$('#lista').innerHTML=card(a);$('#contagem').textContent='1 anúncio (toque em Limpar filtros para voltar à lista)';$('#btnMais').hidden=true}
-function irBairro(b){F=filtrosPadrao();F.bairros=[b];F.ordem='score';LS.set('painel_filtros',F);montarFiltros();mostrar('anuncios')}
+function irBairro(b){F=filtrosPadrao();F.visao='14';F.bairros=[b];F.ordem='score';LS.set('painel_filtros',F);montarFiltros();mostrar('anuncios')}
 
 /* ---------- configuracao ---------- */
 function abrirSetup(msg){$('#sOwner').value=cfg.owner||'';$('#sRepo').value=cfg.repo||'imoveis-dados';$('#sToken').value='';$('#sMsg').textContent=msg||'';
@@ -1316,9 +1304,7 @@ document.addEventListener('click',e=>{const t=e.target;
   if(t.dataset.tab){mostrar(t.dataset.tab);return}
   if(t.dataset.ir){irPara(t.dataset.ir);return}
   if(t.dataset.irb){mapa&&mapa.closePopup();irBairro(t.dataset.irb);return}
-  if(t.dataset.p!==undefined&&t.closest('#fPeriodo')){F.periodo=t.dataset.p;LS.set('painel_filtros',F);montarFiltros();renderLista();return}
-  if(t.dataset.o!==undefined){F.origem=t.dataset.o;LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista();return}
-  if(t.dataset.at){atalho(t.dataset.at);return}
+  if(t.dataset.visao){F.visao=t.dataset.visao;LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista();return}
   if(t.dataset.zona){const bs=BAIRROS.filter(x=>x[4]===t.dataset.zona).map(x=>x[0]),on=bs.every(b=>F.bairros.includes(b));
     F.bairros=on?F.bairros.filter(b=>!bs.includes(b)):[...new Set([...F.bairros,...bs])];LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista();return}
   if(t.dataset.band!==undefined){[F.pmin,F.pmax]=t.dataset.band.split('|');LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista();return}
@@ -1353,8 +1339,7 @@ document.addEventListener('change',e=>{const t=e.target,pc=t.closest('.card[data
   if(c&&t.dataset.act==='status'){mudarStatus(c.dataset.id,t.value);rerenderCard(c.dataset.id);return}
   if(t.closest('#boxFiltros,#barraRapida'))lerFiltros()});
 $('#fTexto').addEventListener('input',()=>{clearTimeout(window._ft);window._ft=setTimeout(lerFiltros,300)});
-$('#fJanela2').onchange=e=>{F.janela=e.target.checked;LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};
-$('#btnLimpar').onclick=$('#btnLimpar2').onclick=()=>{F=filtrosPadrao();LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};
+$('#btnLimpar').onclick=$('#btnLimpar2').onclick=()=>{F={...filtrosPadrao(),visao:F.visao};LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};
 $('#btnMais').onclick=()=>{limite+=40;renderLista()};
 function mostrarSaude(aberta){$('#saude').hidden=!aberta;$('#saude').style.display=aberta?'flex':'none';
   $('#btnSaude').hidden=!SAUDE||aberta;$('#btnSaude').title=SAUDE?$('#saudeTx').textContent:'';}
