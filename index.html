@@ -50,6 +50,7 @@ details.mais summary{cursor:pointer;font-weight:600;color:var(--acc)}
 .card{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:3px}
 .card.own{border-left:5px solid var(--ok)}
 .card.desc{opacity:.55}
+.card.saindo{opacity:0;transform:translateX(30px);transition:opacity .25s,transform .25s}
 .b1{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .tag{font-size:11px;padding:2px 7px;border-radius:10px;background:var(--chip);color:var(--tx);font-weight:600}
 .tag.hoje{background:#d62828;color:#fff}.tag.novo{background:#D9CCFF;color:#0F0A1A}.tag.prop{background:var(--ok);color:#fff}
@@ -389,8 +390,8 @@ function marcarConferido(){const g=(DATA.gerado_em||'').replace('T',' ').slice(0
   CRM.config=CRM.config||{};CRM.config.conferido_ate=g;LS.set('painel_conferido_ate',g);salvar();preparar();montarFiltros();renderLista()}
 function lead(id){return CRM.leads[id]||{status:'novo'}}
 // anuncio do grupo que guarda o seu CRM (status, nome, nota); sem CRM em nenhum, o proprio anuncio
-// imoveis (nao anuncios) que entraram depois da ultima conferencia e nao foram descartados nem agenciados
-const contarNovos=()=>new Set(ADS.filter(a=>a.conferir&&!['descartado','agenciado'].includes(lead(comLead(a).id).status)).map(a=>a.gid)).size;
+// imoveis (nao anuncios) que entraram depois da ultima conferencia e ainda estao sem status (28/10: checando, agenciado ou descartado ja contam como tratados)
+const contarNovos=()=>new Set(ADS.filter(a=>a.conferir&&lead(comLead(a).id).status==='novo').map(a=>a.gid)).size;
 function comLead(a){const c=(a.grupo||[a]).filter(o=>CRM.leads[o.id]);return c.find(o=>CRM.leads[o.id].status!=='novo')||c[0]||a}
 function leadMut(id){return CRM.leads[id]||(CRM.leads[id]={status:'novo',hist:[]})}
 function preparar(){
@@ -514,18 +515,34 @@ function filtrar(){
   const ord={rec:(a,b)=>(b.estoque?0:1)-(a.estoque?0:1)||b.entrada.localeCompare(a.entrada)||b.rec.localeCompare(a.rec)||b.score-a.score,score:(a,b)=>b.score-a.score||b.rec.localeCompare(a.rec),
     pdesc:(a,b)=>b.preco-a.preco,pasc:(a,b)=>a.preco-b.preco,m2asc:(a,b)=>(a.pm2||1e9)-(b.pm2||1e9),m2desc:(a,b)=>b.pm2-a.pm2}[F.ordem]||(()=>0);
   return r.sort(ord)}
-function renderLista(){
-  const todos=filtrar(),P=filtrosPadrao();const ativos=Object.keys(P).filter(k=>k!=='ordem'&&k!=='visao'&&JSON.stringify(F[k])!==JSON.stringify(P[k])).length;
-  // um card por imovel: fica a posicao do melhor anuncio do grupo, com o anuncio que guarda o seu CRM quando houver
-  const porG={},r=[];for(const a of todos)(porG[a.gid]=porG[a.gid]||[]).push(a);
+// um card por imovel: fica a posicao do melhor anuncio do grupo, com o anuncio que guarda o seu CRM quando houver
+function porImovel(todos){const porG={},r=[];for(const a of todos)(porG[a.gid]=porG[a.gid]||[]).push(a);
   for(const a of todos){const m=porG[a.gid];if(!m)continue;delete porG[a.gid];r.push(m.find(o=>CRM.leads[o.id])||a)}
+  return r}
+function renderLista(){
+  const todos=filtrar(),r=porImovel(todos);
+  contagem(todos,r);
+  $('#lista').innerHTML=r.slice(0,limite).map(card).join('')||'<p class="mut">Nenhum anúncio com esses filtros.</p>';
+  $('#btnMais').hidden=r.length<=limite}
+// 28/10, pedido de Bruno: marcar status tira o card da lista na hora (se o filtro atual nao o mostra mais) e o contador de novos desce, sem redesenhar a lista toda
+function aposStatus(c){const a=ADS.find(x=>x.id===c.dataset.id);if(!a)return;
+  const todos=filtrar(),r=porImovel(todos);
+  if(!todos.some(x=>x.gid===a.gid)){c.classList.add('saindo');
+    setTimeout(()=>{c.remove();const nos=new Set([...$('#lista').querySelectorAll('.card')].map(e=>e.dataset.id));
+      const prox=r.slice(0,limite).find(x=>!nos.has(x.id));if(prox)$('#lista').insertAdjacentHTML('beforeend',card(prox));
+      if(!r.length)$('#lista').innerHTML='<p class="mut">Nenhum anúncio com esses filtros.</p>';
+      $('#btnMais').hidden=r.length<=limite},260)}
+  else rerenderCard(a.id);
+  contagem(todos,r);
+  const vivo=x=>!['descartado','agenciado'].includes(lead(comLead(x).id).status);
+  for(const ch of $('#fVisao').querySelectorAll('[data-visao]')){const v=VISOES.find(w=>w[0]===ch.dataset.visao);if(!v)continue;
+    ch.textContent=`${v[1]} (${new Set(ADS.filter(x=>v[2](x)&&(v[0]==='tudo'||vivo(x))).map(x=>x.gid)).size})`}}
+function contagem(todos,r){const P=filtrosPadrao();const ativos=Object.keys(P).filter(k=>k!=='ordem'&&k!=='visao'&&JSON.stringify(F[k])!==JSON.stringify(P[k])).length;
   $('#resumoF').textContent=ativos?`(${ativos} ativos)`:'';
   const nConf=contarNovos();
   $('#contagem').innerHTML=`${r.length} de ${NIMOV} imóveis`+(todos.length>r.length?` (${todos.length} anúncios; os repetidos em outros sites ficam dentro do card)`:'')+(nConf?` · <a href="#" id="lnkNovos" style="color:#d62828;font-weight:700">${nConf} chegaram desde a sua última conferência</a> <button class="btn" id="btnConferi" title="Tudo que entrou no radar até agora deixa de aparecer como novo">Marquei como conferidos</button>`:` · nada novo desde ${esc(levRot(conferidoAte()))}`);
   $('#btnLimpar2').hidden=!ativos;
-  if(nConf){$('#lnkNovos').onclick=e=>{e.preventDefault();F={...filtrosPadrao(),visao:'novos',ordem:'rec'};LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};$('#btnConferi').onclick=marcarConferido}
-  $('#lista').innerHTML=r.slice(0,limite).map(card).join('')||'<p class="mut">Nenhum anúncio com esses filtros.</p>';
-  $('#btnMais').hidden=r.length<=limite}
+  if(nConf){$('#lnkNovos').onclick=e=>{e.preventDefault();F={...filtrosPadrao(),visao:'novos',ordem:'rec'};LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};$('#btnConferi').onclick=marcarConferido}}
 function card(a){const L=lead(a.id);const tags=[];
   if(a.conferir)tags.push(`<span class="tag hoje" title="Entrou no radar depois da sua última conferência (${esc(levRot(conferidoAte()))})">NOVO NO RADAR</span>`);
   if(a.levantamento)tags.push(`<span class="tag est" title="Rodada de coleta em que o anúncio apareceu pela primeira vez">levantamento ${esc(levRot(a.levantamento,a.lev_tipo))}</span>`);
@@ -1337,7 +1354,7 @@ document.addEventListener('change',e=>{const t=e.target,pc=t.closest('.card[data
     return}
   if(t.closest('#pBarra')){PF.texto=$('#pTexto').value;PF.ordem=$('#pOrdem').value;LS.set('painel_pfiltros',PF);plimite=30;renderPredios();return}
   const c=t.closest('.card');
-  if(c&&t.dataset.act==='status'){mudarStatus(c.dataset.id,t.value);rerenderCard(c.dataset.id);return}
+  if(c&&t.dataset.act==='status'){mudarStatus(c.dataset.id,t.value);aposStatus(c);return}
   if(t.closest('#boxFiltros,#barraRapida'))lerFiltros()});
 $('#fTexto').addEventListener('input',()=>{clearTimeout(window._ft);window._ft=setTimeout(lerFiltros,300)});
 $('#btnLimpar').onclick=$('#btnLimpar2').onclick=()=>{F={...filtrosPadrao(),visao:F.visao};LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};
