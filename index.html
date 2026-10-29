@@ -167,12 +167,13 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
         <li><b>Olhe a redondeza.</b> Na mesma caminhada, passe pelos prédios a até 300 m e pelas ruas da lista "Ruas", procurando placas de venda (use "+ Imóvel manual" na aba Anúncios para registrar).</li>
         <li><b>Volte.</b> Defina "Próximo retorno" de 2 a 4 semanas. Zelador que vê a mesma pessoa voltar passa a indicar.</li>
       </ol>
-      <p class="mut">Os prédios saem do endereço completo (rua e número) que a Auxiliadora e a Foxter informam em cada anúncio; o nome do condomínio e a data de entrega vêm dos dois sites. ZAP, QuintoAndar, Loft e os demais só informam a rua, então um anúncio deles entra no prédio quando rua e metragem batem com uma planta dele, marcado como "provável". A visão "Ruas" soma todos os sites. Prédio em obra fica escondido por padrão, porque quem vende é a construtora; a fase só é conhecida nos prédios que também aparecem na Foxter.</p>
+      <p class="mut">Os prédios saem do endereço completo (rua e número) que a Auxiliadora e a Foxter informam em cada anúncio; o nome do condomínio e a data de entrega vêm dos dois sites. ZAP, QuintoAndar, Loft e os demais só informam a rua, então um anúncio deles entra no prédio quando rua e metragem batem com uma planta dele, marcado como "provável". A visão "Ruas" soma todos os sites. Prédio em obra fica escondido por padrão, porque quem vende é a construtora; a fase só é conhecida nos prédios que também aparecem na Foxter. Nos outros, use o botão "É lançamento" no card: o prédio sai da lista principal e vai para "Lançamentos marcados", no fim da página (ou escolha "Só lançamentos" no filtro).</p>
     </details>
     <div class="box" id="pBarra" style="padding:8px 12px">
       <div class="chips" id="pVisao" style="margin-top:0"></div>
       <div class="chips" id="pBairros"></div>
       <div class="chips" id="pFase"></div>
+      <div class="chips" id="pLanc"></div>
       <div class="chips" id="pMin"></div>
       <div class="chips" id="pItbi"></div>
       <div class="chips" id="pItbiMin"></div>
@@ -184,6 +185,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
     <div id="pMapa" style="height:420px;border-radius:10px;border:1px solid var(--ln);margin-bottom:10px" hidden></div>
     <div id="pLista"></div>
     <div class="bar"><button class="btn" id="pMais" hidden>Mostrar mais</button></div>
+    <div id="pLanc2"></div>
   </section>
   <section id="tab-vitrine" hidden></section>
   <section id="tab-imobiliarias" hidden></section>
@@ -688,7 +690,10 @@ const PST=[['nao','Não visitado','#8a8a8a'],['visitado','Visitado, sem contato'
  ['parceiro','Porta aberta (indica)','#1F7A4D'],['retornar','Retornar','#0F6E7A'],['sem_acesso','Sem acesso ou recusou','#b23a3a']];
 const PSTM=Object.fromEntries(PST.map(s=>[s[0],{nome:s[1],cor:s[2]}]));
 const FASES=[['pronto','Prontos'],['recente','Entregues há até 3 anos'],['obra','Em obra']];
-function predFiltroPadrao(){return {visao:'lista',bairros:[],fases:['pronto','recente'],min:'2',ij:'v365',im:'',status:[],texto:'',ordem:'total'}}
+function predFiltroPadrao(){return {visao:'lista',bairros:[],fases:['pronto','recente'],min:'2',ij:'v365',im:'',status:[],texto:'',ordem:'total',lanc:'fim'}}
+// lancamento marcado a mao na ficha (f.lanc): sai da lista principal e fica numa secao no fim, ou sozinho com o filtro "so"
+const ehLanc=p=>!!pficha(p.id).lanc;
+let plancAberto=false;
 function pficha(id){return (CRM.predios||{})[id]||{status:'nao'}}
 function pfichaMut(id){CRM.predios=CRM.predios||{};return CRM.predios[id]||(CRM.predios[id]={status:'nao',hist:[]})}
 function distM(a,b){const R=6371e3,r=Math.PI/180,dl=(b.lat-a.lat)*r,dg=(b.lng-a.lng)*r;
@@ -698,7 +703,7 @@ function prepararPredios(){
   if(!window._pfOk){window._pfOk=1;const d=predFiltroPadrao();/* filtro salvo velho nunca deve esconder a lista: busca por texto não persiste e valores inválidos caem */
     PF.texto='';PF.fases=(PF.fases||[]).filter(f=>FASES.some(x=>x[0]===f));PF.bairros=(PF.bairros||[]).filter(b=>BAIRROS.some(x=>x[0]===b));
     PF.status=(PF.status||[]).filter(k=>PST.some(x=>x[0]===k));if(!['lista','mapa','ruas'].includes(PF.visao))PF.visao='lista';
-    if(!IJ.some(x=>x[0]===PF.ij))PF.ij=d.ij;LS.set('painel_pfiltros',PF)}
+    if(!IJ.some(x=>x[0]===PF.ij))PF.ij=d.ij;if(!['fim','so'].includes(PF.lanc))PF.lanc='fim';LS.set('painel_pfiltros',PF)}
   const ext=Object.values(CRM.predios_extra||{}).filter(x=>!x.removido).map(x=>({...x,fase:'pronto',unidades:[],total:0,fora_rede:0,areas:[],itens:[],manual:true,rua_total:0}));
   PL=[...(PRED.predios||[]),...ext];
   // predios a ate 300 m: grade de ~350 m e busca so nas 9 celas vizinhas (antes comparava todos com todos, 2,5 s na abertura)
@@ -712,9 +717,9 @@ const IJ=[['v30','30 dias'],['v90','90 dias'],['v180','6 meses'],['v365','12 mes
 const iv=p=>(p.itbi&&p.itbi[PF.ij||'v365'])||0;
 function filtrarPredios(){const t=PF.texto.trim().toLowerCase();
   const r=PL.filter(p=>{const f=pficha(p.id);
-    if(!p.manual&&PF.fases.length&&!PF.fases.includes(p.fase))return false;
+    if(!f.lanc&&!p.manual&&PF.fases.length&&!PF.fases.includes(p.fase))return false;   // lancamento marcado aparece qualquer que seja a fase
     if(PF.bairros.length&&!PF.bairros.includes(p.bairro))return false;
-    if(PF.min&&!PF.im&&!p.manual&&p.total<+PF.min&&!(CRM.predios||{})[p.id])return false;
+    if(PF.min&&!PF.im&&!p.manual&&!f.lanc&&p.total<+PF.min&&!(CRM.predios||{})[p.id])return false;
     if(PF.im&&iv(p)<+PF.im)return false;
     if(PF.status.length&&!PF.status.includes(f.status))return false;
     if(t&&!`${p.nome} ${p.rua} ${p.numero} ${p.bairro} ${f.sindico||''} ${f.zelador||''} ${f.adm||''} ${f.nota||''}`.toLowerCase().includes(t))return false;
@@ -729,12 +734,13 @@ function montarFiltrosP(){
   chipsP('pVisao','Ver','visao',[['lista','Lista'],['mapa','Mapa'],['ruas','Ruas']]);
   chipsP('pBairros','Bairro','bairros',BAIRROS.map(([b])=>[b,b]));
   chipsP('pFase','Prédio','fases',FASES);
+  chipsP('pLanc','Lançamentos marcados','lanc',[['fim','Separados no fim da lista'],['so','Só lançamentos']]);
   chipsP('pMin','À venda','min',[['','Todos'],['2','2 ou mais'],['3','3 ou mais'],['5','5 ou mais']]);
   chipsP('pItbi','Vendas ITBI em','ij',IJ);
   chipsP('pItbiMin','Mínimo de vendas','im',[['','Todos'],['2','2 ou mais'],['3','3 ou mais'],['5','5 ou mais'],['10','10 ou mais']]);
   chipsP('pStatus','Visita','status',PST.map(([k,n])=>[k,n]));
   $('#pTexto').value=PF.texto;$('#pOrdem').value=PF.ordem;
-  for(const id of ['pFase','pMin','pItbi','pItbiMin','pStatus'])$('#'+id).hidden=PF.visao==='ruas';$('#pTexto').parentElement.hidden=PF.visao==='ruas'}
+  for(const id of ['pFase','pLanc','pMin','pItbi','pItbiMin','pStatus'])$('#'+id).hidden=PF.visao==='ruas';$('#pTexto').parentElement.hidden=PF.visao==='ruas'}
 function alternarP(k,v){if(Array.isArray(PF[k]))PF[k]=PF[k].includes(v)?PF[k].filter(x=>x!==v):[...PF[k],v];else PF[k]=v;
   LS.set('painel_pfiltros',PF);plimite=30;montarFiltrosP();renderPredios()}
 const endereco=p=>`${p.rua}${p.numero?', '+p.numero:''}`;
@@ -756,6 +762,7 @@ function cardPredio(p){const f=pficha(p.id),ab=pabertos.has(p.id);const tags=[];
   if(p.portaria)tags.push('<span class="tag">portaria</span>');
   if(p.itbi&&p.itbi.v365>=3&&!p.total)tags.push('<span class="tag prop">vende e sem anúncio</span>');
   if(p.manual)tags.push('<span class="tag">manual</span>');
+  if(f.lanc)tags.push('<span class="tag lanc">lançamento (marcado)</span>');
   if(f.retorno&&f.retorno<=HOJE_ISO)tags.push('<span class="tag hoje">retorno</span>');
   const tel=(n,t,quem)=>t?`<a class="btn wpp" href="https://wa.me/${('55'+t.replace(/\D/g,'')).replace(/^5555/,'55')}?text=${encodeURIComponent(`Olá${n?', '+n.trim().split(' ')[0]:''}! Tudo bem? Sou ${CRM.config?.meu_nome||'[seu nome]'}, da ${CRM.config?.agencia||'Suder Imóveis, da rede Auxiliadora Predial'}. Passei no ${p.nome} esses dias. Fico à disposição para o que precisar no prédio.`)}" target="_blank" rel="noopener">WhatsApp ${quem}</a>`:'';
   const inp=(k,t,extra='')=>`<label>${t}<input data-pf="${k}" value="${esc(f[k])}" ${extra}></label>`;
@@ -769,6 +776,7 @@ function cardPredio(p){const f=pficha(p.id),ab=pabertos.has(p.id);const tags=[];
   <div class="acoes"><a class="btn" href="${esc(mapsUrl(p))}" target="_blank" rel="noopener">Mapa ↗</a>
    ${p.total?`<button class="btn" data-pact="unid">Unidades ${punid.has(p.id)?'▴':'▾'}</button>`:''}
    <select data-pact="status" style="border-color:${PSTM[f.status]?.cor}">${PST.map(([k,n])=>`<option value="${k}"${f.status===k?' selected':''}>${n}</option>`).join('')}</select>
+   <button class="btn" data-pact="lanc" title="${f.lanc?'Voltar o prédio para a lista principal':'Tirar o prédio da lista principal e guardar em Lançamentos marcados, no fim da página'}">${f.lanc?'Não é lançamento':'É lançamento'}</button>
    <button class="btn" data-pact="ficha">${ab?'▴':'Ficha ▾'}</button>${tel(f.sindico,f.sindico_tel,'síndico')}${tel(f.zelador,f.zelador_tel,'zelador')}</div>
   <div class="igual"${punid.has(p.id)?'':' hidden'}>${(p.unidades||[]).map(u=>`<a class="lk" href="${esc(safeUrl(u.link))}" target="_blank" rel="noopener">${esc(u.fonte)} · ${mi(u.preco)}${u.area?' · '+u.area+' m²':''}${u.quartos?' · '+esc(u.quartos)+' qts':''}${u.certo?'':' · provável'} ↗</a>`).join(' ')}
    ${p.perto.length?`<br>Perto: ${p.perto.slice(0,6).map(o=>`<a class="lk" data-pir="${esc(o.id)}">${esc(o.nome)} (${o.total}, ${Math.round(distM(p,o))} m)</a>`).join(' ')}`:''}
@@ -798,18 +806,21 @@ function renderPredios(){
   const v=PF.visao;$('#pMapa').hidden=v!=='mapa';$('#pManual').hidden=v==='ruas';
   if(!PL.length&&!(PRED.predios||[]).length){$('#pContagem').textContent='';$('#pLista').innerHTML='<p class="mut">'+(window.PRED_ERRO?'Não consegui carregar a lista de prédios ('+esc(window.PRED_ERRO)+'). Confira o token em Configurações e recarregue a página.':'Lista de prédios ainda não gerada. Ela é atualizada na rotina diária dos portais.')+'</p>';return}
   if(v==='ruas'){const r=(PRED.ruas||[]).filter(x=>!PF.bairros.length||PF.bairros.includes(x.bairro));
-    $('#pContagem').textContent=`${r.length} ruas com mais anúncios`;$('#pMais').hidden=$('#pRota').hidden=$('#pLimparRota').hidden=true;
+    $('#pContagem').textContent=`${r.length} ruas com mais anúncios`;$('#pLanc2').innerHTML='';$('#pMais').hidden=$('#pRota').hidden=$('#pLimparRota').hidden=true;
     $('#pLista').innerHTML=`<div class="panel scroll"><table><tr><th>Rua</th><th>Bairro</th><th>Anúncios</th><th>Fora da rede</th><th>Em obra</th><th>Prédios mapeados</th><th>Sites</th></tr>
      ${r.map(x=>`<tr><td><a class="lk" data-prua="${esc(x.rua)}">${esc(x.rua)}</a></td><td>${esc(x.bairro)}</td><td><b>${x.total}</b></td><td>${x.fora_rede}</td><td>${x.obra||''}</td><td>${x.predios||''}</td><td class="mut">${esc(Object.entries(x.fontes).sort((a,b)=>b[1]-a[1]).map(([f,n])=>f+' '+n).join(', '))}</td></tr>`).join('')}</table>
      <p class="mut">Conta todos os anúncios com rua informada, de todos os sites, inclusive os da rede. Rua cheia de anúncio é rua com giro: vale percorrer a pé atrás de placas e portarias. Toque no nome para ver os anúncios dela.</p></div>`;return}
-  const r=filtrarPredios();$('#pContagem').textContent=`${r.length} prédios · ${r.reduce((s,p)=>s+p.total,0)} unidades à venda · ${r.reduce((s,p)=>s+iv(p),0)} vendas pelo ITBI (${(IJ.find(x=>x[0]===(PF.ij||'v365'))||[])[1]})`+(PRED.gerado_em?` · anúncios de ${br(PRED.gerado_em.slice(0,10))}`:'')+(PRED.itbi&&PRED.itbi.pagamentos_ate?` · ITBI pago até ${br(PRED.itbi.pagamentos_ate)} (a prefeitura publica em blocos, última publicação ${br(PRED.itbi.publicado_pela_prefeitura)})`:'');
+  const todos=filtrarPredios(),rl=todos.filter(ehLanc),r=PF.lanc==='so'?rl:todos.filter(p=>!ehLanc(p));$('#pContagem').textContent=`${r.length} prédios · ${r.reduce((s,p)=>s+p.total,0)} unidades à venda · ${r.reduce((s,p)=>s+iv(p),0)} vendas pelo ITBI (${(IJ.find(x=>x[0]===(PF.ij||'v365'))||[])[1]})`+(PF.lanc==='so'?' (só lançamentos marcados)':rl.length?` · ${rl.length} lançamento${rl.length>1?'s':''} no fim da lista`:'')+(PRED.gerado_em?` · anúncios de ${br(PRED.gerado_em.slice(0,10))}`:'')+(PRED.itbi&&PRED.itbi.pagamentos_ate?` · ITBI pago até ${br(PRED.itbi.pagamentos_ate)} (a prefeitura publica em blocos, última publicação ${br(PRED.itbi.publicado_pela_prefeitura)})`:'');
   const ativos=[PF.texto.trim()&&'busca "'+PF.texto.trim()+'"',PF.bairros.length&&PF.bairros.length+' bairro(s)',PF.status.length&&'visita',PF.im&&'mínimo ITBI'].filter(Boolean);
   $('#pContagem').innerHTML=esc($('#pContagem').textContent)+(ativos.length?` · <b>filtros: ${esc(ativos.join(', '))}</b> <a class="lk" id="pReset2">limpar</a>`:'');
   const r2=$('#pReset2');if(r2)r2.onclick=()=>{PF=predFiltroPadrao();LS.set('painel_pfiltros',PF);$('#pTexto').value='';montarFiltrosP();renderPredios()};
-  if(v==='mapa'){$('#pLista').innerHTML='';$('#pMais').hidden=true;renderMapaPredios(r);return}
+  if(v==='mapa'){$('#pLista').innerHTML='';$('#pLanc2').innerHTML='';$('#pMais').hidden=true;renderMapaPredios(r);return}
   $('#pLista').innerHTML=`<div class="grade">${r.slice(0,plimite).map(cardPredio).join('')}</div>`;
-  if(!r.length)$('#pLista').innerHTML='<p class="mut">Nenhum prédio com esses filtros. <a class="lk" id="pReset">Limpar filtros</a></p>';const rs=$('#pReset');if(rs)rs.onclick=()=>{PF=predFiltroPadrao();LS.set('painel_pfiltros',PF);$('#pTexto').value='';montarFiltrosP();renderPredios()};
-  $('#pMais').hidden=r.length<=plimite;atualizarRota()}
+  if(!r.length)$('#pLista').innerHTML=PF.lanc==='so'?'<p class="mut">Nenhum prédio marcado como lançamento com esses filtros. Para marcar, use "É lançamento" no card.</p>':'<p class="mut">Nenhum prédio com esses filtros. <a class="lk" id="pReset">Limpar filtros</a></p>';const rs=$('#pReset');if(rs)rs.onclick=()=>{PF=predFiltroPadrao();LS.set('painel_pfiltros',PF);$('#pTexto').value='';montarFiltrosP();renderPredios()};
+  $('#pMais').hidden=r.length<=plimite;atualizarRota();
+  // lancamentos marcados: depois do "Mostrar mais", fechados por padrao
+  $('#pLanc2').innerHTML=PF.lanc!=='so'&&rl.length?`<details class="box" id="pLancBox"${plancAberto?' open':''}><summary><b>Lançamentos marcados (${rl.length})</b> <span class="mut">fora da lista principal; "Não é lançamento" devolve o prédio</span></summary><div class="grade" style="margin-top:8px">${rl.map(cardPredio).join('')}</div></details>`:'';
+  const lb=$('#pLancBox');if(lb)lb.ontoggle=()=>{plancAberto=lb.open}}
 function renderMapaPredios(r){
   if(!window.L){$('#pMapa').innerHTML='<p class="mut" style="padding:12px">Mapa indisponível sem internet.</p>';return}
   if(!pmapa){pmapa=L.map('pMapa',{scrollWheelZoom:false}).setView([-30.036,-51.195],14);
@@ -819,7 +830,7 @@ function renderMapaPredios(r){
     L.circleMarker([p.lat,p.lng],{radius:5+Math.min(14,2*Math.sqrt(PF.ordem==='total'?p.total:Math.max(iv(p),1))*1.6),color:ROTA.has(p.id)?'#d62828':cor,weight:ROTA.has(p.id)?3:1,fillColor:cor,fillOpacity:.7}).addTo(pcamadas)
      .bindPopup(`<b>${esc(p.nome)}</b><br>${esc(endereco(p))} · ${esc(p.bairro)}<br>${p.total} à venda${p.fora_rede?` (${p.fora_rede} fora da rede)`:''}${p.itbi?` · ${p.itbi[PF.ij||'v365']||0} vendas em ${IJ_CURTO[PF.ij||'v365']} (ITBI)`:''}<br>${esc(PSTM[pficha(p.id).status]?.nome)}<br><a class="lk" data-pir="${esc(p.id)}">abrir ficha</a> · <a class="lk" data-protap="${esc(p.id)}">${ROTA.has(p.id)?'tirar do':'pôr no'} roteiro</a>`)}
   if(pts.length)pmapa.fitBounds(pts,{padding:[20,20],maxZoom:16})}
-function irPredio(id){PF={...predFiltroPadrao(),fases:[],min:'',visao:'lista'};const p=PL.find(x=>x.id===id);if(!p)return;
+function irPredio(id){PF={...predFiltroPadrao(),fases:[],min:'',visao:'lista'};const p=PL.find(x=>x.id===id);if(!p)return;if(ehLanc(p))PF.lanc='so';
   pmapa&&pmapa.closePopup();PF.texto=p.nome;montarFiltrosP();pabertos.add(id);mostrar('predios')}
 
 /* ---------- abas ---------- */
@@ -1338,6 +1349,7 @@ document.addEventListener('click',e=>{const t=e.target;
   const pc=t.closest('.card[data-pid]');
   if(pc){const id=pc.dataset.pid;
     if(t.dataset.pact==='ficha'){pabertos.has(id)?pabertos.delete(id):pabertos.add(id);rerenderPredio(id)}
+    if(t.dataset.pact==='lanc'){const f=pfichaMut(id);f.lanc=!f.lanc;f.atualizado=Date.now();salvar();renderPredios();return}
     if(t.dataset.pact==='unid'){punid.has(id)?punid.delete(id):punid.add(id);rerenderPredio(id)}
     if(t.dataset.pact==='remover'){const x=CRM.predios_extra[id];if(x){x.removido=true;x.atualizado=Date.now();salvar();prepararPredios();renderPredios()}}
     return}
