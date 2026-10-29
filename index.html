@@ -299,6 +299,8 @@ function normF(f){if(!f||f.v!==2)f=null;f={...filtrosPadrao(),...(f||{}),maduro:
 function isoLocal(d){const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`}
 function somaDias(n){const d=new Date();d.setDate(d.getDate()+n);return isoLocal(d)}
 function dias(s){if(!s)return 9999;const [y,m,d]=s.slice(0,10).split('-').map(Number);return Math.round((new Date(HOJE.getFullYear(),HOJE.getMonth(),HOJE.getDate())-new Date(y,m-1,d))/864e5)}
+// com hora quando o site informa (desde 29/10 o publicado pode vir 'AAAA-MM-DD HH:MM')
+const brh=s=>br(s)+(s&&s.length>=16?' às '+s.slice(11,16):'');
 const br=s=>s?`${s.slice(8,10)}/${s.slice(5,7)}`+(s.slice(0,4)!==String(HOJE.getFullYear())?'/'+s.slice(2,4):''):'';
 const money=v=>'R$ '+Math.round(v).toLocaleString('pt-BR');
 const mi=v=>v>=1e6?'R$ '+(v/1e6).toLocaleString('pt-BR',{maximumFractionDigits:2})+' mi':'R$ '+Math.round(v/1e3)+' mil';
@@ -568,7 +570,7 @@ function card(a){const L=lead(a.id);const tags=[];
   const det=[a.area_m2&&a.area_m2+' m²',a.quartos&&a.quartos+' qts',a.pm2&&money(a.pm2)+'/m²',a.tipo].filter(Boolean).join(' · ');
   const pio=a.pioneiro,COMO={publicado:'publicado em',radar:'visto pelo radar em',codigo:'pelo código do anúncio, já existia em'};
   const prim=pio?`1ª aparição do imóvel: ${COMO[pio.como]||''} ${br(pio.data)}${pio.id!==a.id?` em <a class="lk" href="${esc(safeUrl(pio.link))}" target="_blank" rel="noopener">${esc(pio.fonte==='OLX (proprietário)'?'OLX':pio.fonte)} ↗</a>`:' (este anúncio)'} · `:'';
-  const datas=prim+(a.publicado?`publicado ${br(a.publicado)} (confirmado) · visto ${br(a.visto)}`:a.estoque?`data não informada pelo site · já estava no ar quando entrou no radar (${br(a.visto)})`:`data de publicação não informada pelo site · detectado pelo radar em ${br(a.visto)}, pode ser mais antigo`)+(a.ultima&&a.ultima!==a.visto?` · ainda no ar em ${br(a.ultima)}`:'')+(a.outrosNomes.length?` · também em ${esc(a.outrosNomes.join(', '))}`:'');
+  const datas=prim+(a.publicado?`publicado ${brh(a.publicado)} (confirmado) · visto ${br(a.visto)}`:a.estoque?`data não informada pelo site · já estava no ar quando entrou no radar (${br(a.visto)})`:`data de publicação não informada pelo site · detectado pelo radar em ${br(a.visto)}, pode ser mais antigo`)+(a.ultima&&a.ultima!==a.visto?` · ainda no ar em ${br(a.ultima)}`:'')+(a.outrosNomes.length?` · também em ${esc(a.outrosNomes.join(', '))}`:'');
   return `<article class="card${a.proprietario?' own':''}${L.status==='descartado'?' desc':''}" data-id="${esc(a.id)}">
   <div class="b1">${tags.join('')}<span class="score" style="background:${corScore(a.score)}" title="${esc(a.motivos.join('\n')||'sem sinais fortes')}">${a.score}</span></div>
   <div class="preco">${money(a.preco)}${a.preco<a.preco_inicial?`<s>${money(a.preco_inicial)}</s>`:''}</div>
@@ -916,7 +918,7 @@ function gerarPdf(){
   const blocos=Object.entries(por).map(([b,L])=>`<h2>${esc(b)} (${L.length})</h2>`+L.map(a=>{const st=lead(a.id).status;
     return `<div class="c${a.proprietario?' own':''}"><div class="p">${mi(a.preco)} <span class="s">nota ${a.score}${st&&st!=='novo'?' · '+esc(STM[st]?.nome||st):''}</span></div>
     <div class="m">${esc([a.tipo,a.area_m2&&a.area_m2+' m²',a.quartos&&a.quartos+' qts',a.rua,a.fonte].filter(Boolean).join(' · '))}</div>
-    <div class="m">${a.estoque?'estoque inicial':(a.publicado?'publicado ':'visto ')+br(a.rec)}${a.outrosNomes.length?' · também em '+esc(a.outrosNomes.join(', ')):''}</div>
+    <div class="m">${a.estoque?'estoque inicial':(a.publicado?'publicado ':'visto ')+(a.rec===a.publicado?brh(a.rec):br(a.rec))}${a.outrosNomes.length?' · também em '+esc(a.outrosNomes.join(', ')):''}</div>
     ${a.link?`<a href="${esc(a.link)}">${esc(a.link.replace(/^https?:\/\/(www\.)?/,'').slice(0,70))}</a>`:''}${a.outrosAds.map(o=>`<div class="m">Possível mesmo imóvel em ${esc(o.fonte)} (${mi(o.preco)}): <a href="${esc(o.link)}">${esc(o.link.replace(/^https?:\/\/(www\.)?/,'').slice(0,70))}</a></div>`).join('')}</div>`}).join('')).join('');
   w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anúncios ${HOJE_ISO}</title>
 <style>@page{size:A4;margin:10mm}body{font:13px/1.35 Arial,sans-serif;color:#222;background:#fff;margin:12px}h1{font-size:18px;margin:0 0 4px}
