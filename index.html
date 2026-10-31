@@ -157,6 +157,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
     <div class="bar"><span id="contagem" class="grow mut"></span><button class="btn" id="btnLimpar2" hidden>Limpar</button><button class="btn" id="btnPdf" title="Abre a lista filtrada pronta para salvar em PDF ou imprimir">PDF da lista</button><button class="btn" id="btnManual">+ Imóvel manual</button></div>
     <div id="lista"></div>
     <div class="bar"><button class="btn" id="btnMais" hidden>Mostrar mais</button></div>
+    <div id="checandoBox"></div>
   </section>
   <section id="tab-predios" hidden>
     <details class="box" id="pGuia"><summary>Como usar no porta a porta</summary>
@@ -469,13 +470,13 @@ function montarFiltros(){
   $('#fBairros .lbl').insertAdjacentHTML('afterend',ZONAS.map(z=>{const bs=BAIRROS.filter(x=>x[4]===z).map(x=>x[0]);const on=bs.every(b=>F.bairros.includes(b));
     return `<span class="chip${on?' on':''}" data-zona="${esc(z)}" style="font-weight:700">${esc(z)} (${bs.length})</span>`}).join(''));
   grupo('fStatus','Status','status',STATUS.slice(1).map(([k,n])=>[k,n]));
-  $('#fStatus').insertAdjacentHTML('beforeend','<span class="mut" style="font-size:12px">nenhum marcado: esconde descartados e agenciados</span>');
+  $('#fStatus').insertAdjacentHTML('beforeend','<span class="mut" style="font-size:12px">nenhum marcado: só sem status em cima, checando na caixa do fim, descartados e agenciados escondidos</span>');
   grupo('fFonte','Site','fonte',OPC.fonte.map(f=>[f,f]));
   grupo('fTipo','Tipo','tipo',OPC.tipo.map(t=>[t,t]));
   grupo('fQts','Quartos','qts',[['1','1'],['2','2'],['3','3'],['4','4 ou mais']]);
   $('#fPreco').innerHTML='<b class="lbl">Preço</b>'+FAIXAS.map(([mn,mx,t])=>`<span class="chip${String(F.pmin)===mn&&String(F.pmax)===mx?' on':''}" data-band="${mn}|${mx}">${t}</span>`).join('');
-  const vivo=a=>!['descartado','agenciado'].includes(lead(comLead(a).id).status);
-  $('#fVisao').innerHTML=VISOES.map(([id,t,f])=>`<span class="chip${F.visao===id?' on':''}" data-visao="${id}" style="font-weight:700">${t} (${new Set(ADS.filter(a=>f(a)&&(id==='tudo'||vivo(a))).map(a=>a.gid)).size})</span>`).join('');
+  const vivo=a=>!['descartado','agenciado','checando'].includes(lead(comLead(a).id).status);
+  $('#fVisao').innerHTML=VISOES.map(([id,t,f])=>`<span class="chip${F.visao===id?' on':''}" data-visao="${id}" style="font-weight:700">${t} (${new Set(ADS.filter(a=>f(a)&&(id==='tudo'?lead(comLead(a).id).status!=='checando':vivo(a))).map(a=>a.gid)).size})</span>`).join('');
   $('#fVisaoTxt').textContent=(VISOES.find(v=>v[0]===F.visao)||VISOES[0])[3];
   const m=CAMPOS;
   for(const [id,k] of Object.entries(m))$('#'+id).value=F[k]??'';
@@ -505,7 +506,8 @@ function filtrar(){
     if(F.anunc==='imob'&&a.proprietario)return false;
     if(F.fonte.length&&!F.fonte.includes(a.fonte))return false;
     if(F.tipo.length&&!F.tipo.includes(a.tipo||'não informado'))return false;
-    if(F.status.length?!F.status.includes(L.status):F.visao!=='tudo'&&['descartado','agenciado'].includes(L.status))return false;
+    // 30/10, pedido de Bruno: sem status marcado no filtro, a lista de cima fica so com os sem status; checando vai para a caixa do fim
+    if(F.status.length?!F.status.includes(L.status):L.status==='checando'||F.visao!=='tudo'&&['descartado','agenciado'].includes(L.status))return false;
     if(F.pmin&&a.preco<F.pmin*1000)return false;
     if(F.pmax&&a.preco>F.pmax*1000)return false;
     if(F.amin&&(!a.m2||a.m2<+F.amin))return false;
@@ -529,10 +531,22 @@ function renderLista(){
   const todos=filtrar(),r=porImovel(todos);
   contagem(todos,r);
   $('#lista').innerHTML=r.slice(0,limite).map(card).join('')||'<p class="mut">Nenhum anúncio com esses filtros.</p>';
-  $('#btnMais').hidden=r.length<=limite}
+  $('#btnMais').hidden=r.length<=limite;
+  renderChecando()}
+// caixa no fim da pagina com TODOS os imoveis em checando (sem os filtros de cima), marcados mais recentemente primeiro;
+// some quando o filtro de status esta em uso, porque ai a lista de cima ja mostra o que foi pedido
+let checAberto=false;
+function renderChecando(){const box=$('#checandoBox');
+  if(F.status.length){box.innerHTML='';return}
+  const c=porImovel(ADS.filter(a=>lead(comLead(a).id).status==='checando'))
+    .sort((a,b)=>(lead(comLead(b).id).atualizado||0)-(lead(comLead(a).id).atualizado||0));
+  box.innerHTML=c.length?`<details class="box" id="checDet"${checAberto?' open':''}><summary><b>Checando (${c.length})</b> <span class="mut">fora da lista de cima; "Sem status" devolve o imóvel</span></summary><div style="margin-top:8px">${c.map(card).join('')}</div></details>`:'';
+  const d=$('#checDet');if(d)d.ontoggle=()=>{checAberto=d.open}}
 // 28/10, pedido de Bruno: marcar status tira o card da lista na hora (se o filtro atual nao o mostra mais) e o contador de novos desce, sem redesenhar a lista toda
 function aposStatus(c){const a=ADS.find(x=>x.id===c.dataset.id);if(!a)return;
+  if(c.closest('#checandoBox')){renderLista();return}     // status mudado dentro da caixa de checando: redesenha as duas listas
   const todos=filtrar(),r=porImovel(todos);
+  renderChecando();
   if(!todos.some(x=>x.gid===a.gid)){c.classList.add('saindo');
     setTimeout(()=>{c.remove();const nos=new Set([...$('#lista').querySelectorAll('.card')].map(e=>e.dataset.id));
       const prox=r.slice(0,limite).find(x=>!nos.has(x.id));if(prox)$('#lista').insertAdjacentHTML('beforeend',card(prox));
@@ -540,9 +554,9 @@ function aposStatus(c){const a=ADS.find(x=>x.id===c.dataset.id);if(!a)return;
       $('#btnMais').hidden=r.length<=limite},260)}
   else rerenderCard(a.id);
   contagem(todos,r);
-  const vivo=x=>!['descartado','agenciado'].includes(lead(comLead(x).id).status);
+  const vivo=x=>!['descartado','agenciado','checando'].includes(lead(comLead(x).id).status);
   for(const ch of $('#fVisao').querySelectorAll('[data-visao]')){const v=VISOES.find(w=>w[0]===ch.dataset.visao);if(!v)continue;
-    ch.textContent=`${v[1]} (${new Set(ADS.filter(x=>v[2](x)&&(v[0]==='tudo'||vivo(x))).map(x=>x.gid)).size})`}}
+    ch.textContent=`${v[1]} (${new Set(ADS.filter(x=>v[2](x)&&(v[0]==='tudo'?lead(comLead(x).id).status!=='checando':vivo(x))).map(x=>x.gid)).size})`}}
 function contagem(todos,r){const P=filtrosPadrao();const ativos=Object.keys(P).filter(k=>k!=='ordem'&&k!=='visao'&&JSON.stringify(F[k])!==JSON.stringify(P[k])).length;
   $('#resumoF').textContent=ativos?`(${ativos} ativos)`:'';
   const nConf=contarNovos();
