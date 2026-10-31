@@ -400,6 +400,8 @@ function comLead(a){const c=(a.grupo||[a]).filter(o=>CRM.leads[o.id]);return c.f
 function leadMut(id){return CRM.leads[id]||(CRM.leads[id]={status:'novo',hist:[]})}
 function preparar(){
   for(const L of Object.values(CRM.leads||{}))L.status=stN(L.status);
+  // anuncio republicado com codigo novo (30/10): o antigo saiu do painel e o status dele passa para o novo
+  for(const a of DATA.anuncios)if(!CRM.leads[a.id])for(const v of a.crm_de||[])if(CRM.leads[v]){CRM.leads[a.id]=CRM.leads[v];break}
   const extras=Object.values(CRM.extras||{}).filter(x=>!x.removido);
   ADS=[...DATA.anuncios,...extras].map(a=>{const m2=num(a.area_m2)>=15?num(a.area_m2):0;   // area abaixo de 15 m2 e erro do site (27/10: casa com 1 m2), vale como nao informada
     return {...a,area_m2:m2?a.area_m2:'',outros:a.outros||[],m2,pm2:m2?a.preco/m2:0,rec:a.primeira||a.publicado||a.visto,
