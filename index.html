@@ -405,12 +405,13 @@ function preparar(){
   for(const a of DATA.anuncios)if(!CRM.leads[a.id])for(const v of a.crm_de||[])if(CRM.leads[v]){CRM.leads[a.id]=CRM.leads[v];break}
   const extras=Object.values(CRM.extras||{}).filter(x=>!x.removido);
   ADS=[...DATA.anuncios,...extras].map(a=>{const m2=num(a.area_m2)>=15?num(a.area_m2):0;   // area abaixo de 15 m2 e erro do site (27/10: casa com 1 m2), vale como nao informada
-    return {...a,area_m2:m2?a.area_m2:'',outros:a.outros||[],m2,pm2:m2?a.preco/m2:0,rec:a.primeira||a.publicado||a.visto,
+    return {...a,fonte:a.fonte==='OLX (proprietário)'?'OLX':a.fonte,   // 02/11: o nome antigo da fonte (OLX so de proprietarios ate 24/10) aparecia como "OLX (proprietário)" em anuncio de imobiliaria; proprietario agora so pela etiqueta
+    area_m2:m2?a.area_m2:'',outros:a.outros||[],m2,pm2:m2?a.preco/m2:0,rec:a.primeira||a.publicado||a.visto,
     idade:dias(a.primeira||a.publicado||a.visto),estoque:a.base_inicial&&!a.publicado,conf:!!a.publicado,radar:!a.publicado&&!a.base_inicial,
     entrada:a.levantamento||(a.visto?a.visto.slice(0,10)+' 00:00':'')}});
   // novidade = entrou no radar nas ultimas 2 semanas (com data de publicacao ou nao); "para conferir" = entrou depois da ultima conferencia
   const ca=conferidoAte();
-  for(const a of ADS){a.novoRadar=!a.base_inicial&&!a.republicado&&dias(a.visto)<=JANELA;a.conferir=!a.base_inicial&&!a.republicado&&!a.manual&&a.entrada>ca}
+  for(const a of ADS){a.novoRadar=!a.base_inicial&&!a.republicado&&!a.lote&&dias(a.visto)<=JANELA;a.conferir=!a.base_inicial&&!a.republicado&&!a.lote&&!a.manual&&a.entrada>ca}
   // maduro: proprietario com data real de publicacao, no ar ha 45 dias ou mais e visto nas ultimas 2 semanas
   for(const a of ADS)a.maduro=a.proprietario&&!!a.publicado&&a.idade>=MADURO&&dias(a.ultima||a.visto)<=14;
   MED={};for(const [b] of BAIRROS)MED[b]=mediana(ADS.filter(a=>a.bairro===b&&a.pm2).map(a=>a.pm2));
@@ -461,7 +462,7 @@ const FAIXAS=[['','','Qualquer'],['500','800','500 a 800 mil'],['800','1500','80
 // 27/10, pedido de Bruno ("filtros demais que se sobrepoem"): tres visoes no lugar de atalhos, periodo, data, levantamento e
 // "14 dias". Imovel novo = 1a aparicao recente em qualquer site, sem republicacao, fora de republicador e de estoque (a rede ja sai
 // antes, no exportar_painel). Em 2 sites fora da rede tambem serve; o de um site so ganha nota maior
-const novoDeVerdade=a=>!a.republicado&&!a.republicador&&!a.estoque;
+const novoDeVerdade=a=>!a.republicado&&!a.republicador&&!a.estoque&&!a.lote;   // lote = carga em bloco de uma imobiliaria (02/11, Evox)
 const VISOES=[['novos','Novos (hoje e ontem)',a=>novoDeVerdade(a)&&a.idade<=1,'Imóveis que apareceram pela primeira vez hoje ou ontem, em qualquer site fora da rede, sem republicação. É a lista do dia.'],
   ['14','Últimos 14 dias',a=>novoDeVerdade(a)&&a.idade<=JANELA,'A mesma regra para os últimos 14 dias. Serve para retomar o que ficou para trás.'],
   ['tudo','Tudo',a=>true,'Tudo o que está no painel, inclusive republicados, anunciantes que republicam em ciclo, descartados e agenciados. Para consulta.']];
@@ -574,6 +575,7 @@ function card(a){const L=lead(a.id);const tags=[];
   if(a.republicado)tags.push(`<span class="tag est" title="O mesmo site já anunciou este imóvel com outro código (${esc({foto:'mesmas fotos',semelhante:'fotos semelhantes',dados:'mesmo anunciante, área, quartos e preço'}[a.republicado.como]||'')}). A data do card é a do anúncio anterior.">REPUBLICADO · desde ${esc(br(a.republicado.desde))}</span>`);
   if(a.republicador)tags.push(`<span class="tag est" title="Este anunciante tira anúncios do ar e publica de novo com código novo">republicador</span>`);
   if(a.proprietario)tags.push('<span class="tag prop">proprietário</span>');
+  if(a.lote)tags.push(`<span class="tag multi" title="Muitos anúncios publicados de uma vez pelo mesmo anunciante: carteira entrando no portal, não imóvel recém-colocado à venda. Fica fora de Novos.">${esc(a.lote)}</span>`);
   if(a.outros.length)tags.push(`<span class="tag multi">${a.outros.length+1} sites</span>`);
   else if(!a.manual)tags.push('<span class="tag hoje" title="Nenhum outro site tem este imóvel (comparação pelas fotos). Provavelmente o anúncio pioneiro.">ÚNICO</span>');
   if(a.unidades)tags.push(`<span class="tag lanc" title="A mesma imobiliária anuncia ${a.unidades} unidades com preço e metragem iguais: costuma ser lançamento ou prédio novo com várias unidades à venda. Abra Anúncio ▾ para ver todas.">LANÇAMENTO? ${a.unidades} unidades iguais</span>`);
