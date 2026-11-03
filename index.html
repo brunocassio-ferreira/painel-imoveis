@@ -465,7 +465,7 @@ const FAIXAS=[['','','Qualquer'],['500','800','500 a 800 mil'],['800','1500','80
 const novoDeVerdade=a=>!a.republicado&&!a.republicador&&!a.estoque&&!a.lote;   // lote = carga em bloco de uma imobiliaria (02/11, Evox)
 const VISOES=[['novos','Novos (hoje e ontem)',a=>novoDeVerdade(a)&&a.idade<=1,'Imóveis que apareceram pela primeira vez hoje ou ontem, em qualquer site fora da rede, sem republicação. É a lista do dia.'],
   ['14','Últimos 14 dias',a=>novoDeVerdade(a)&&a.idade<=JANELA,'A mesma regra para os últimos 14 dias. Serve para retomar o que ficou para trás.'],
-  ['tudo','Tudo',a=>true,'Tudo o que está no painel, inclusive republicados, anunciantes que republicam em ciclo, descartados e agenciados. Para consulta.']];
+  ['tudo','Tudo',a=>true,'Tudo o que está no painel, inclusive republicados, cargas em bloco e anunciantes que republicam em ciclo. Descartados e agenciados saem da lista; para vê-los, marque o status no filtro.']];
 function montarFiltros(){
   grupo('fBairros','Bairro','bairros',BAIRROS.map(([b])=>[b,b]));
   $('#fBairros .lbl').insertAdjacentHTML('afterend',ZONAS.map(z=>{const bs=BAIRROS.filter(x=>x[4]===z).map(x=>x[0]);const on=bs.every(b=>F.bairros.includes(b));
@@ -477,7 +477,7 @@ function montarFiltros(){
   grupo('fQts','Quartos','qts',[['1','1'],['2','2'],['3','3'],['4','4 ou mais']]);
   $('#fPreco').innerHTML='<b class="lbl">Preço</b>'+FAIXAS.map(([mn,mx,t])=>`<span class="chip${String(F.pmin)===mn&&String(F.pmax)===mx?' on':''}" data-band="${mn}|${mx}">${t}</span>`).join('');
   const vivo=a=>!['descartado','agenciado','checando'].includes(lead(comLead(a).id).status);
-  $('#fVisao').innerHTML=VISOES.map(([id,t,f])=>`<span class="chip${F.visao===id?' on':''}" data-visao="${id}" style="font-weight:700">${t} (${new Set(ADS.filter(a=>f(a)&&(id==='tudo'?lead(comLead(a).id).status!=='checando':vivo(a))).map(a=>a.gid)).size})</span>`).join('');
+  $('#fVisao').innerHTML=VISOES.map(([id,t,f])=>`<span class="chip${F.visao===id?' on':''}" data-visao="${id}" style="font-weight:700">${t} (${new Set(ADS.filter(a=>f(a)&&vivo(a)).map(a=>a.gid)).size})</span>`).join('');
   $('#fVisaoTxt').textContent=(VISOES.find(v=>v[0]===F.visao)||VISOES[0])[3];
   const m=CAMPOS;
   for(const [id,k] of Object.entries(m))$('#'+id).value=F[k]??'';
@@ -508,7 +508,8 @@ function filtrar(){
     if(F.fonte.length&&!F.fonte.includes(a.fonte))return false;
     if(F.tipo.length&&!F.tipo.includes(a.tipo||'não informado'))return false;
     // 30/10, pedido de Bruno: sem status marcado no filtro, a lista de cima fica so com os sem status; checando vai para a caixa do fim
-    if(F.status.length?!F.status.includes(L.status):L.status==='checando'||F.visao!=='tudo'&&['descartado','agenciado'].includes(L.status))return false;
+    // 02/11 (Bruno): no Tudo o descartado tambem sai da lista ao marcar; para ver descartados/agenciados, marcar o status no filtro
+    if(F.status.length?!F.status.includes(L.status):['checando','descartado','agenciado'].includes(L.status))return false;
     if(F.pmin&&a.preco<F.pmin*1000)return false;
     if(F.pmax&&a.preco>F.pmax*1000)return false;
     if(F.amin&&(!a.m2||a.m2<+F.amin))return false;
@@ -557,7 +558,7 @@ function aposStatus(c){const a=ADS.find(x=>x.id===c.dataset.id);if(!a)return;
   contagem(todos,r);
   const vivo=x=>!['descartado','agenciado','checando'].includes(lead(comLead(x).id).status);
   for(const ch of $('#fVisao').querySelectorAll('[data-visao]')){const v=VISOES.find(w=>w[0]===ch.dataset.visao);if(!v)continue;
-    ch.textContent=`${v[1]} (${new Set(ADS.filter(x=>v[2](x)&&(v[0]==='tudo'?lead(comLead(x).id).status!=='checando':vivo(x))).map(x=>x.gid)).size})`}}
+    ch.textContent=`${v[1]} (${new Set(ADS.filter(x=>v[2](x)&&vivo(x)).map(x=>x.gid)).size})`}}
 function contagem(todos,r){const P=filtrosPadrao();const ativos=Object.keys(P).filter(k=>k!=='ordem'&&k!=='visao'&&JSON.stringify(F[k])!==JSON.stringify(P[k])).length;
   $('#resumoF').textContent=ativos?`(${ativos} ativos)`:'';
   const nConf=contarNovos();
@@ -1022,7 +1023,7 @@ const MANUAL_FILTROS=`<div class="panel"><h3>Manual: como chegar aos imóveis no
  <details class="box"><summary><b>2. As três visões e os filtros</b></summary><ul>
   <li><b>Novos (hoje e ontem):</b> a lista do dia.</li>
   <li><b>Últimos 14 dias:</b> a mesma regra para duas semanas, para retomar o que ficou para trás.</li>
-  <li><b>Tudo:</b> consulta. Inclui republicados, anunciantes que republicam em ciclo, descartados e agenciados.</li>
+  <li><b>Tudo:</b> consulta. Inclui republicados, cargas em bloco e anunciantes que republicam em ciclo. Descartados e agenciados saem da lista como nas outras visões; marque o status no filtro para vê-los.</li>
   <li><b>Filtrar</b> (bairro, preço, quartos, tipo) recorta a visão escolhida. Para marcar uma região inteira, toque em "Zona Sul", "Azenha" ou "Centro-Norte".</li>
   <li><b>Mais filtros:</b> status, site, proprietário direto, metragem, "Só em um site" e "Baixou o preço" (quem já baixou costuma ouvir uma proposta de avaliação).</li>
   <li><b>Ordem "Maior oportunidade":</b> a nota soma único (+25), primeira aparição hoje ou ontem (+20), proprietário direto (+30), baixou o preço (+15), R$/m² acima da mediana do bairro (+10), ticket de R$ 1,5 mi ou mais (+5) e tira 30 de quem republica em ciclo. Toque na nota para ver o motivo.</li>
