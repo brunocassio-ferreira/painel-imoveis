@@ -108,6 +108,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
     <button data-tab="anuncios" class="on">Anúncios</button>
     <button data-tab="predios">Prédios</button>
     <button data-tab="vitrine">Vitrine</button>
+    <button data-tab="leads">Leads</button>
     <button data-tab="imobiliarias">Imobiliárias</button>
     <button data-tab="itbi">ITBI</button>
     <button data-tab="acoes">Ações</button>
@@ -189,6 +190,7 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
     <div id="pLanc2"></div>
   </section>
   <section id="tab-vitrine" hidden></section>
+  <section id="tab-leads" hidden></section>
   <section id="tab-imobiliarias" hidden></section>
   <section id="tab-itbi" hidden></section>
   <section id="tab-acoes" hidden></section>
@@ -378,7 +380,7 @@ async function carregar(){
     else{abrirSetup('Conecte o repositório para ver os dados.');return}
   }catch(e){$('#info').textContent='erro: '+e.message;abrirSetup('Não consegui ler os dados: '+e.message);return}
   preparar();renderTudo()}
-const ARQS=[['anuncios.json',d=>DATA=d],['predios.json',d=>PRED=d],['itbi_cenario.json',d=>ITB=d],['vitrine.json',d=>VIT=d],['acoes.json',d=>ACO=d],['imobiliarias.json',d=>IMB=d]];
+const ARQS=[['anuncios.json',d=>DATA=d],['predios.json',d=>PRED=d],['itbi_cenario.json',d=>ITB=d],['vitrine.json',d=>VIT=d],['leads_instagram.json',d=>LIG=d],['acoes.json',d=>ACO=d],['imobiliarias.json',d=>IMB=d]];
 // recebe o que veio da rede depois que a tela ja abriu; so remonta se algum arquivo mudou
 async function completarCarga(rede,tinha){
   const res=await Promise.all(rede.map(p=>p.catch(e=>({erro:e}))));let mudou=false;
@@ -1294,6 +1296,75 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-vb],[data-
 document.addEventListener('change',e=>{if(e.target.id==='vFoto'){VF.foto=e.target.value;VF.lim=24;vSalvar()}
   if(e.target.id==='vOrdem'){VF.ordem=e.target.value;vSalvar()}if(e.target.id==='vSuder'){VF.suder=e.target.checked;VF.lim=24;vSalvar()}if(e.target.id==='vMarca'){VF.marca=e.target.checked;VF.lim=24;vSalvar()}});
 
+/* ---------- Leads do Instagram (04/11/2026) ---------- */
+// leads_instagram.json vem da rodada da madrugada (instagram_leads.py); o status de abordagem fica no crm.json (leads_ig)
+let LIG=null, LF=Object.assign({prio:['A','B'],perfis:[],st:'aberto',texto:'',lim:30},LS.get('painel_lfiltros',{}));
+const LST=[['','Não abordado'],['enviada','Mensagem enviada'],['respondeu','Respondeu'],['sem','Sem interesse'],['atendimento','Virou atendimento']];
+const LPRIO={A:'Pergunta específica',B:'Pediu informação',C:'Elogio ou marcação'};
+const PREP_EXTRA={'Cidade Baixa':'na','Floresta':'na','Glória':'na','Tristeza':'na','Vila Assunção':'na','Pedra Redonda':'na','Serraria':'na','Cavalhada':'na','Hípica':'na','Vila Ipiranga':'na','Vila Conceição':'na','Vila Jardim':'na','Agronomia':'na'};
+function lStatus(u){return ((CRM.leads_ig||{})[u]||{}).st||''}
+function lSetStatus(u,st){CRM.leads_ig=CRM.leads_ig||{};CRM.leads_ig[u]={st,quando:new Date().toISOString().slice(0,16).replace('T',' ')};salvar()}
+function lLista(){
+  if(!LIG||!LIG.leads)return [];
+  const q=LF.texto.trim().toLowerCase();
+  return LIG.leads.filter(l=>(!LF.prio.length||LF.prio.includes(l.prioridade))&&(!LF.perfis.length||l.perfis.some(p=>LF.perfis.includes(p)))
+    &&(LF.st==='todos'||(LF.st==='aberto'?!['sem','atendimento'].includes(lStatus(l.u)):lStatus(l.u)===LF.st))
+    &&(!q||(l.u+' '+l.nome+' '+l.comentarios.map(c=>c.txt+' '+c.imovel).join(' ')).toLowerCase().includes(q)))}
+function lMensagem(l){
+  const pn=(l.nome||'').trim().split(/\s+/)[0];const nome=pn&&!/[|@]/.test(pn)&&pn.length>1?pn.charAt(0).toUpperCase()+pn.slice(1).toLowerCase():'';
+  const c=l.comentarios[0]||{};const b=c.bairro;const onde=b?` ${PREP[b]||PREP_EXTRA[b]||'no'} ${b}`:' aqui em Porto Alegre';
+  const C=CRM.config||{};const quem=C.meu_nome||'Bruno';
+  const tipo=/casa/i.test(c.imovel)?'casa':/cobertura/i.test(c.imovel)?'cobertura':'apartamento';
+  const vendido=/vendid|vendeu/i.test(c.txt||'');
+  return `Oi${nome?', '+nome:''}! Tudo bem? Aqui é o ${quem}, trabalho com imóveis na Suder | Auxiliadora Predial, em Porto Alegre.\n`+
+    (vendido?`Vi que você se interessou por um ${tipo}${onde} que já foi vendido. Tenho acesso a outros parecidos na rede e posso te mandar algumas opções.\n`
+            :`Vi que você está procurando ${tipo}${onde}. Se quiser, separo algumas opções parecidas que temos na rede, dentro do que você procura.\n`)+
+    `O que é indispensável pra você no imóvel?`}
+function lCard(l){
+  const st=lStatus(l.u);const novo=LIG.leitura&&l.primeira_vista>=String(LIG.leitura.quando||'9999').slice(0,10);
+  const cor={A:'var(--ok)',B:'#B8860B',C:'#7a7a7a'}[l.prioridade];
+  const tags=[novo?'<span class="tag hoje">novo</span>':'',l.posts>1?`<span class="tag rad">busca ativa: ${l.posts} posts</span>`:'',
+    `<span class="tag est">${esc(LPRIO[l.prioridade])}</span>`].join('');
+  const cs=l.comentarios.slice(0,4).map(c=>`<div class="det">“${esc(c.txt)}” <span class="mut">em <a href="${esc(safeUrl(c.link))}" target="_blank" rel="noopener">@${esc(c.perfil)}</a>${c.imovel?' · procura: '+esc(c.imovel):''} · ${esc(String(c.quando).slice(0,10))}</span></div>`).join('');
+  return `<div class="card${st==='sem'?' desc':''}">
+   <div class="b1">${tags}<span class="score" style="background:${cor}" title="Prioridade">${l.prioridade}</span></div>
+   <div class="preco"><a href="https://www.instagram.com/${esc(l.u)}/" target="_blank" rel="noopener">@${esc(l.u)}</a></div>
+   <div class="loc"><b>${l.nome?esc(l.nome):'<span class="mut">nome ainda não lido</span>'}</b>${l.bairros.length?' · '+esc(l.bairros.join(', ')):''}</div>
+   ${cs}${l.comentarios.length>4?`<div class="mut">+${l.comentarios.length-4} comentários</div>`:''}
+   <div class="acoes">
+     <select data-lst="${esc(l.u)}">${LST.map(([k,t])=>`<option value="${k}"${st===k?' selected':''}>${t}</option>`).join('')}</select>
+     <a class="btn" href="https://www.instagram.com/${esc(l.u)}/" target="_blank" rel="noopener">Abrir perfil</a>
+     <button class="btn pri" data-lmsg="${esc(l.u)}">Copiar mensagem</button>
+   </div></div>`}
+function renderLeads(){const el=$('#tab-leads');
+  if(!LIG||!LIG.leads){el.innerHTML='<div class="panel"><h3>Leads do Instagram</h3><p class="mut">Os dados ainda não foram publicados. A rodada da madrugada gera o leads_instagram.json (instagram_leads.py).</p></div>';return}
+  const L=lLista(),perfis=LIG.perfis||[],lt=LIG.leitura||{};
+  const chip=(a,v,t,on)=>`<span class="chip${on?' on':''}" data-${a}="${esc(v)}">${esc(t)}</span>`;
+  const n=k=>LIG.leads.filter(l=>l.prioridade===k).length;
+  const aviso=lt.status&&lt.status!=='ok'?`<p style="color:#B42318"><b>A última leitura não terminou (${esc(lt.status==='sem_login'?'Instagram sem login no Chrome do painel':lt.status==='bloqueio'?'a Meta pediu verificação; conferir a conta antes de seguir':lt.status)}).</b> A lista abaixo é a da leitura anterior.</p>`:'';
+  el.innerHTML=`<div class="panel"><h3>Leads do Instagram: quem pediu imóvel nos comentários</h3>
+   <p class="mut">Comentários dos últimos 7 dias nos perfis ${perfis.map(p=>'@'+esc(p)).join(', ')}, lidos na madrugada só com leitura (nada é curtido, seguido ou enviado). Corretores e imobiliárias ficam de fora. A pergunta específica (valor, condomínio, rua, metragem, se já vendeu) vem primeiro; quem comentou em mais de um post está buscando de verdade. A abordagem é sempre manual, pela conta de corretor, com poucas mensagens por dia.</p>
+   ${aviso}<p class="mut">Última leitura: ${esc(lt.quando||'—')} · ${lt.posts??'—'} posts · ${lt.novos??'—'} comentários novos · ${LIG.leads.length} pessoas guardadas (30 dias) · ${L.length} na lista.</p></div>
+   <div class="box"><div class="chips" style="margin-top:0">${['A','B','C'].map(k=>chip('lp',k,`${k}: ${LPRIO[k]} (${n(k)})`,LF.prio.includes(k))).join('')}</div>
+   <div class="chips">${perfis.map(p=>chip('lperf',p,'@'+p,LF.perfis.includes(p))).join('')}</div>
+   <div class="bar"><label>Status <select id="lSt">${[['aberto','Em aberto'],['todos','Todos'],...LST.map(([k,t])=>[k,t])].map(([k,t])=>`<option value="${k}"${LF.st===k?' selected':''}>${t}</option>`).join('')}</select></label>
+   <label>Buscar <input id="lTx" value="${esc(LF.texto)}" placeholder="nome, @, bairro, comentário"></label></div></div>
+   <div id="lLista" class="grade">${L.slice(0,LF.lim).map(lCard).join('')||'<p class="mut">Ninguém com esses filtros.</p>'}</div>
+   ${L.length>LF.lim?'<p style="text-align:center"><button class="btn" data-lmais>Mostrar mais</button></p>':''}`}
+function lSalvar(){LS.set('painel_lfiltros',LF);renderLeads()}
+document.addEventListener('click',e=>{const t=e.target.closest('[data-lp],[data-lperf],[data-lmais],[data-lmsg]');if(!t)return;
+  const alterna=(arr,v)=>{const i=arr.indexOf(v);i<0?arr.push(v):arr.splice(i,1)};
+  if(t.dataset.lp!==undefined){alterna(LF.prio,t.dataset.lp);LF.lim=30;lSalvar();return}
+  if(t.dataset.lperf!==undefined){alterna(LF.perfis,t.dataset.lperf);LF.lim=30;lSalvar();return}
+  if(t.dataset.lmais!==undefined){LF.lim+=30;lSalvar();return}
+  const l=LIG&&LIG.leads.find(x=>x.u===t.dataset.lmsg);if(!l)return;
+  navigator.clipboard?.writeText(lMensagem(l));const orig=t.textContent;t.textContent='copiado';setTimeout(()=>t.textContent=orig,1500)});
+document.addEventListener('change',e=>{
+  if(e.target.dataset&&e.target.dataset.lst!==undefined){lSetStatus(e.target.dataset.lst,e.target.value);return}
+  if(e.target.id==='lSt'){LF.st=e.target.value;LF.lim=30;lSalvar()}});
+document.addEventListener('input',e=>{if(e.target.id==='lTx'){LF.texto=e.target.value;LS.set('painel_lfiltros',LF);
+  const L=lLista();$('#lLista').innerHTML=L.slice(0,LF.lim).map(lCard).join('')||'<p class="mut">Ninguém com esses filtros.</p>'}});
+
 /* ---------- Guia de imobiliárias pequenas ---------- */
 let IMB=null, IMF=Object.assign({prio:[],texto:'',visitada:''},LS.get('painel_imfiltros',{})), IMV=LS.get('painel_imvisitas',{});
 function imFone(t){const d=String(t||'').replace(/\D/g,'').replace(/^55/,'');return d.length===11?`(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`:d.length===10?`(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`:String(t||'')}
@@ -1336,7 +1407,7 @@ document.addEventListener('input',e=>{if(e.target.id==='imTexto'){IMF.texto=e.ta
 
 function renderTudo(){montarFiltros();renderLista();const ab=$('nav button.on').dataset.tab;if(ab!=='anuncios')mostrar(ab)}
 function mostrar(tab){$$('nav button').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));$$('main>section').forEach(s=>s.hidden=s.id!=='tab-'+tab);
-  if(tab==='anuncios')renderLista();if(tab==='predios'){montarFiltrosP();renderPredios()}if(tab==='vitrine')renderVitrine();if(tab==='imobiliarias')renderImobiliarias();if(tab==='itbi')renderItbi();if(tab==='acoes')renderAcoes();if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();if(tab==='guia')renderGuia();window.scrollTo(0,0)}
+  if(tab==='anuncios')renderLista();if(tab==='predios'){montarFiltrosP();renderPredios()}if(tab==='vitrine')renderVitrine();if(tab==='leads')renderLeads();if(tab==='imobiliarias')renderImobiliarias();if(tab==='itbi')renderItbi();if(tab==='acoes')renderAcoes();if(tab==='funil')renderFunil();if(tab==='mapa')renderMapa();if(tab==='intel')renderIntel();if(tab==='msg')renderMsg();if(tab==='guia')renderGuia();window.scrollTo(0,0)}
 function irPara(id){F=filtrosPadrao();F.visao='tudo';F.status=[];LS.set('painel_filtros',F);mostrar('anuncios');montarFiltros();
   const a=ADS.find(x=>x.id===id);if(!a)return;$('#lista').innerHTML=card(a);$('#contagem').textContent='1 anúncio (toque em Limpar filtros para voltar à lista)';$('#btnMais').hidden=true}
 function irBairro(b){F=filtrosPadrao();F.visao='14';F.bairros=[b];F.ordem='score';LS.set('painel_filtros',F);montarFiltros();mostrar('anuncios')}
