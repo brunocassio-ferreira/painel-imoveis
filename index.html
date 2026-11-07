@@ -1298,7 +1298,13 @@ document.addEventListener('change',e=>{if(e.target.id==='vFoto'){VF.foto=e.targe
 
 /* ---------- Leads do Instagram (04/11/2026) ---------- */
 // leads_instagram.json vem da rodada da madrugada (instagram_leads.py); o status de abordagem fica no crm.json (leads_ig)
-let LIG=null, LF=Object.assign({prio:['A','B'],perfis:[],st:'aberto',texto:'',lim:30},LS.get('painel_lfiltros',{}));
+let LIG=null, LF=Object.assign({prio:['A','B'],perfis:[],st:'aberto',texto:'',lim:30,ord:'recentes',per:'todos'},LS.get('painel_lfiltros',{}));
+// 06/11, pedido de Bruno: filtro de mais recentes. "ultima" = data do comentário mais novo da pessoa (o JSON vinha em prioridade e, dentro dela, do mais antigo ao mais novo)
+const LPER=[['todos','Qualquer data'],['1','Últimas 24 h'],['3','Últimos 3 dias'],['7','Últimos 7 dias'],['nova','Só da última leitura']];
+function lPeriodoOk(l){if(LF.per==='todos')return true;
+  if(LF.per==='nova')return !!(LIG.leitura&&l.primeira_vista>=String(LIG.leitura.quando||'9999').slice(0,10));
+  // a hora do comentário vem do atributo datetime do Instagram, em UTC (3 h à frente de Brasília); o corte também é em UTC
+  const d=new Date(Date.now()-(+LF.per)*864e5).toISOString().slice(0,16).replace('T',' ');return String(l.ultima||'')>=d}
 const LST=[['','Não abordado'],['contatar','Contatar'],['enviada','Mensagem enviada'],['respondeu','Respondeu'],['sem','Sem interesse'],['atendimento','Virou atendimento'],['descartado','Descartado']];
 // 05/11, pedido de Bruno: Descartado some da lista (como nos anúncios); Contatar vai para a caixa no fim da guia (como Checando)
 const L_FORA=['sem','atendimento','descartado','contatar'];
@@ -1309,9 +1315,11 @@ function lSetStatus(u,st){CRM.leads_ig=CRM.leads_ig||{};CRM.leads_ig[u]={st,quan
 function lLista(){
   if(!LIG||!LIG.leads)return [];
   const q=LF.texto.trim().toLowerCase();
-  return LIG.leads.filter(l=>(!LF.prio.length||LF.prio.includes(l.prioridade))&&(!LF.perfis.length||l.perfis.some(p=>LF.perfis.includes(p)))
-    &&(LF.st==='todos'||(LF.st==='aberto'?!L_FORA.includes(lStatus(l.u)):lStatus(l.u)===LF.st))
-    &&(!q||(l.u+' '+l.nome+' '+l.comentarios.map(c=>c.txt+' '+c.imovel).join(' ')).toLowerCase().includes(q)))}
+  const r=LIG.leads.filter(l=>(!LF.prio.length||LF.prio.includes(l.prioridade))&&(!LF.perfis.length||l.perfis.some(p=>LF.perfis.includes(p)))
+    &&(LF.st==='todos'||(LF.st==='aberto'?!L_FORA.includes(lStatus(l.u)):lStatus(l.u)===LF.st))&&lPeriodoOk(l)
+    &&(!q||(l.u+' '+l.nome+' '+l.comentarios.map(c=>c.txt+' '+c.imovel).join(' ')).toLowerCase().includes(q)));
+  const rec=(a,b)=>String(b.ultima||'').localeCompare(String(a.ultima||''));
+  return r.sort(LF.ord==='prio'?(a,b)=>a.prioridade.localeCompare(b.prioridade)||b.posts-a.posts||rec(a,b):rec)}
 function lMensagem(l){
   const pn=(l.nome||'').trim().split(/\s+/)[0];const nome=pn&&!/[|@]/.test(pn)&&pn.length>1?pn.charAt(0).toUpperCase()+pn.slice(1).toLowerCase():'';
   const c=l.comentarios[0]||{};const b=c.bairro;const onde=b?` ${PREP[b]||PREP_EXTRA[b]||'no'} ${b}`:' aqui em Porto Alegre';
@@ -1350,6 +1358,8 @@ function renderLeads(){const el=$('#tab-leads');
    <div class="box"><div class="chips" style="margin-top:0">${['A','B','C'].map(k=>chip('lp',k,`${k}: ${LPRIO[k]} (${n(k)})`,LF.prio.includes(k))).join('')}</div>
    <div class="chips">${perfis.map(p=>chip('lperf',p,'@'+p,LF.perfis.includes(p))).join('')}</div>
    <div class="bar"><label>Status <select id="lSt">${[['aberto','Em aberto'],['todos','Todos'],...LST.map(([k,t])=>[k,t])].map(([k,t])=>`<option value="${k}"${LF.st===k?' selected':''}>${t}</option>`).join('')}</select></label>
+   <label>Ordem <select id="lOrd">${[['recentes','Mais recentes'],['prio','Prioridade, depois recentes']].map(([k,t])=>`<option value="${k}"${LF.ord===k?' selected':''}>${t}</option>`).join('')}</select></label>
+   <label>Comentado em <select id="lPer">${LPER.map(([k,t])=>`<option value="${k}"${LF.per===k?' selected':''}>${t}</option>`).join('')}</select></label>
    <label>Buscar <input id="lTx" value="${esc(LF.texto)}" placeholder="nome, @, bairro, comentário"></label></div></div>
    <div id="lLista" class="grade">${L.slice(0,LF.lim).map(lCard).join('')||'<p class="mut">Ninguém com esses filtros.</p>'}</div>
    ${L.length>LF.lim?'<p style="text-align:center"><button class="btn" data-lmais>Mostrar mais</button></p>':''}
@@ -1378,7 +1388,9 @@ document.addEventListener('click',e=>{const t=e.target.closest('[data-lp],[data-
   navigator.clipboard?.writeText(lMensagem(l));const orig=t.textContent;t.textContent='copiado';setTimeout(()=>t.textContent=orig,1500)});
 document.addEventListener('change',e=>{
   if(e.target.dataset&&e.target.dataset.lst!==undefined){lSetStatus(e.target.dataset.lst,e.target.value);lAposStatus(e.target);return}
-  if(e.target.id==='lSt'){LF.st=e.target.value;LF.lim=30;lSalvar()}});
+  if(e.target.id==='lSt'){LF.st=e.target.value;LF.lim=30;lSalvar()}
+  if(e.target.id==='lOrd'){LF.ord=e.target.value;LF.lim=30;lSalvar()}
+  if(e.target.id==='lPer'){LF.per=e.target.value;LF.lim=30;lSalvar()}});
 document.addEventListener('input',e=>{if(e.target.id==='lTx'){LF.texto=e.target.value;LS.set('painel_lfiltros',LF);
   const L=lLista();$('#lLista').innerHTML=L.slice(0,LF.lim).map(lCard).join('')||'<p class="mut">Ninguém com esses filtros.</p>'}});
 
