@@ -1303,8 +1303,8 @@ let LIG=null, LF=Object.assign({prio:['A','B'],perfis:[],st:'aberto',texto:'',li
 const LPER=[['todos','Qualquer data'],['1','Últimas 24 h'],['3','Últimos 3 dias'],['7','Últimos 7 dias'],['nova','Só da última leitura']];
 function lPeriodoOk(l){if(LF.per==='todos')return true;
   if(LF.per==='nova')return !!(LIG.leitura&&l.primeira_vista>=String(LIG.leitura.quando||'9999').slice(0,10));
-  // a hora do comentário vem do atributo datetime do Instagram, em UTC (3 h à frente de Brasília); o corte também é em UTC
-  const d=new Date(Date.now()-(+LF.per)*864e5).toISOString().slice(0,16).replace('T',' ');return String(l.ultima||'')>=d}
+  // desde 07/11 a hora do comentário chega em horário de Brasília (instagram_leads.py converte o UTC do Instagram)
+  const d=new Date(Date.now()-(+LF.per)*864e5-3*36e5).toISOString().slice(0,16).replace('T',' ');return String(l.ultima||'')>=d}
 const LST=[['','Não abordado'],['contatar','Contatar'],['enviada','Mensagem enviada'],['respondeu','Respondeu'],['sem','Sem interesse'],['atendimento','Virou atendimento'],['descartado','Descartado']];
 // 05/11, pedido de Bruno: Descartado some da lista (como nos anúncios); Contatar vai para a caixa no fim da guia (como Checando)
 const L_FORA=['sem','atendimento','descartado','contatar'];
