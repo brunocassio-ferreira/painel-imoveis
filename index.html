@@ -51,6 +51,10 @@ details.mais summary{cursor:pointer;font-weight:600;color:var(--acc)}
 .card.own{border-left:5px solid var(--ok)}
 .card.desc{opacity:.55}
 .card.saindo{opacity:0;transform:translateX(30px);transition:opacity .25s,transform .25s}
+.card.marcado{outline:2px solid #4A1FD0;outline-offset:-1px}
+.card .sel{width:18px;height:18px;margin:0 4px 0 0;cursor:pointer;accent-color:#4A1FD0}
+#barraSel{position:sticky;top:0;z-index:5;background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:6px 10px;margin-bottom:8px;align-items:center;gap:8px;flex-wrap:wrap}
+#barraSel.ativa{border-color:#4A1FD0;box-shadow:0 2px 8px rgba(0,0,0,.15)}
 .b1{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .tag{font-size:11px;padding:2px 7px;border-radius:10px;background:var(--chip);color:var(--tx);font-weight:600}
 .tag.hoje{background:#d62828;color:#fff}.tag.novo{background:#D9CCFF;color:#0F0A1A}.tag.prop{background:var(--ok);color:#fff}
@@ -156,6 +160,10 @@ ol.fluxo li{margin-bottom:7px;line-height:1.45}
       <div class="bar"><button class="btn" id="btnLimpar">Limpar filtros</button></div>
     </details>
     <div class="bar"><span id="contagem" class="grow mut"></span><button class="btn" id="btnLimpar2" hidden>Limpar</button><button class="btn" id="btnPdf" title="Abre a lista filtrada pronta para salvar em PDF ou imprimir">PDF da lista</button><button class="btn" id="btnManual">+ Imóvel manual</button></div>
+    <div class="bar" id="barraSel"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="selTodos" style="width:18px;height:18px;accent-color:#4A1FD0"> <span id="selTodosTx">Selecionar todos</span></label>
+      <span id="selN" class="mut grow"></span>
+      <select id="selStatus"><option value="">Mudar status para…</option></select>
+      <button class="btn" id="selAplicar" disabled>Aplicar</button><button class="btn" id="selLimpar" hidden>Limpar seleção</button><button class="btn" id="selDesfazer" hidden>Desfazer</button></div>
     <div id="lista"></div>
     <div class="bar"><button class="btn" id="btnMais" hidden>Mostrar mais</button></div>
     <div id="checandoBox"></div>
@@ -531,12 +539,31 @@ function filtrar(){
 function porImovel(todos){const porG={},r=[];for(const a of todos)(porG[a.gid]=porG[a.gid]||[]).push(a);
   for(const a of todos){const m=porG[a.gid];if(!m)continue;delete porG[a.gid];r.push(m.find(o=>CRM.leads[o.id])||a)}
   return r}
+// 08/11, pedido de Bruno: selecionar varios anuncios (ou todos os da lista filtrada) e mudar o status de uma vez
+let SEL=new Set(),LISTA=[],DESFAZER=null;
+function idsVisiveis(){return new Set([...LISTA.map(a=>a.id),...[...document.querySelectorAll('#checandoBox .card')].map(e=>e.dataset.id)])}
+function atualizarSel(){const v=idsVisiveis();for(const id of [...SEL])if(!v.has(id))SEL.delete(id);
+  const n=SEL.size,tot=LISTA.length,todos=tot&&LISTA.every(a=>SEL.has(a.id));
+  $('#selTodos').checked=!!todos;$('#selTodos').indeterminate=n>0&&!todos;
+  $('#selTodosTx').textContent=`Selecionar todos os ${tot} da lista`;
+  $('#selN').textContent=n?`${n} selecionado${n>1?'s':''}`:'';
+  $('#selAplicar').disabled=!n||!$('#selStatus').value;$('#selLimpar').hidden=!n;
+  $('#barraSel').classList.toggle('ativa',n>0);
+  for(const el of document.querySelectorAll('#lista .card,#checandoBox .card')){const on=SEL.has(el.dataset.id);el.classList.toggle('marcado',on);const cb=el.querySelector('.sel');if(cb)cb.checked=on}}
+function aplicarSel(){const s=$('#selStatus').value;if(!s||!SEL.size)return;
+  const antes=[...SEL].map(id=>[id,lead(id).status]),n=SEL.size;
+  for(const id of SEL)mudarStatus(id,s);
+  DESFAZER={antes,txt:`${n} imóve${n>1?'is':'l'} → ${STM[s].nome}`};SEL.clear();$('#selStatus').value='';
+  montarFiltros();renderLista();
+  const d=$('#selDesfazer');d.hidden=false;d.textContent=`Desfazer (${DESFAZER.txt})`}
+function desfazerSel(){if(!DESFAZER)return;for(const [id,s] of DESFAZER.antes)mudarStatus(id,s);
+  DESFAZER=null;$('#selDesfazer').hidden=true;montarFiltros();renderLista()}
 function renderLista(){
-  const todos=filtrar(),r=porImovel(todos);
+  const todos=filtrar(),r=porImovel(todos);LISTA=r;
   contagem(todos,r);
   $('#lista').innerHTML=r.slice(0,limite).map(card).join('')||'<p class="mut">Nenhum anúncio com esses filtros.</p>';
   $('#btnMais').hidden=r.length<=limite;
-  renderChecando()}
+  renderChecando();atualizarSel()}
 // caixa no fim da pagina com TODOS os imoveis em checando (sem os filtros de cima), marcados mais recentemente primeiro;
 // some quando o filtro de status esta em uso, porque ai a lista de cima ja mostra o que foi pedido
 let checAberto=false;
@@ -549,8 +576,8 @@ function renderChecando(){const box=$('#checandoBox');
 // 28/10, pedido de Bruno: marcar status tira o card da lista na hora (se o filtro atual nao o mostra mais) e o contador de novos desce, sem redesenhar a lista toda
 function aposStatus(c){const a=ADS.find(x=>x.id===c.dataset.id);if(!a)return;
   if(c.closest('#checandoBox')){renderLista();return}     // status mudado dentro da caixa de checando: redesenha as duas listas
-  const todos=filtrar(),r=porImovel(todos);
-  renderChecando();
+  const todos=filtrar(),r=porImovel(todos);LISTA=r;
+  renderChecando();setTimeout(atualizarSel,300);
   if(!todos.some(x=>x.gid===a.gid)){c.classList.add('saindo');
     setTimeout(()=>{c.remove();const nos=new Set([...$('#lista').querySelectorAll('.card')].map(e=>e.dataset.id));
       const prox=r.slice(0,limite).find(x=>!nos.has(x.id));if(prox)$('#lista').insertAdjacentHTML('beforeend',card(prox));
@@ -592,8 +619,8 @@ function card(a){const L=lead(a.id);const tags=[];
   const pio=a.pioneiro,COMO={publicado:'publicado em',radar:'visto pelo radar em',codigo:'pelo código do anúncio, já existia em'};
   const prim=pio?`1ª aparição do imóvel: ${COMO[pio.como]||''} ${br(pio.data)}${pio.id!==a.id?` em <a class="lk" href="${esc(safeUrl(pio.link))}" target="_blank" rel="noopener">${esc(pio.fonte==='OLX (proprietário)'?'OLX':pio.fonte)} ↗</a>`:' (este anúncio)'} · `:'';
   const datas=prim+(a.publicado?`publicado ${brh(a.publicado)} (confirmado) · visto ${br(a.visto)}`:a.estoque?`data não informada pelo site · já estava no ar quando entrou no radar (${br(a.visto)})`:`data de publicação não informada pelo site · detectado pelo radar em ${br(a.visto)}, pode ser mais antigo`)+(a.ultima&&a.ultima!==a.visto?` · ainda no ar em ${br(a.ultima)}`:'')+(a.outrosNomes.length?` · também em ${esc(a.outrosNomes.join(', '))}`:'');
-  return `<article class="card${a.proprietario?' own':''}${L.status==='descartado'?' desc':''}" data-id="${esc(a.id)}">
-  <div class="b1">${tags.join('')}<span class="score" style="background:${corScore(a.score)}" title="${esc(a.motivos.join('\n')||'sem sinais fortes')}">${a.score}</span></div>
+  return `<article class="card${a.proprietario?' own':''}${L.status==='descartado'?' desc':''}${SEL.has(a.id)?' marcado':''}" data-id="${esc(a.id)}">
+  <div class="b1"><input type="checkbox" class="sel" data-act="sel" title="Selecionar para mudar o status de vários de uma vez"${SEL.has(a.id)?' checked':''}>${tags.join('')}<span class="score" style="background:${corScore(a.score)}" title="${esc(a.motivos.join('\n')||'sem sinais fortes')}">${a.score}</span></div>
   <div class="preco">${money(a.preco)}${a.preco<a.preco_inicial?`<s>${money(a.preco_inicial)}</s>`:''}</div>
   <div class="det">${esc(det)}</div>
   <div class="loc"><b>${esc(a.bairro)}</b>${a.rua?' · '+esc(a.rua):''} · ${esc(a.fonte)}</div>
@@ -1488,10 +1515,15 @@ document.addEventListener('change',e=>{const t=e.target,pc=t.closest('.card[data
   if(t.closest('#pBarra')){PF.texto=$('#pTexto').value;PF.ordem=$('#pOrdem').value;LS.set('painel_pfiltros',PF);plimite=30;renderPredios();return}
   const c=t.closest('.card');
   if(c&&t.dataset.act==='status'){mudarStatus(c.dataset.id,t.value);aposStatus(c);return}
+  if(c&&t.dataset.act==='sel'){t.checked?SEL.add(c.dataset.id):SEL.delete(c.dataset.id);atualizarSel();return}
+  if(t.id==='selTodos'){if(t.checked)LISTA.forEach(a=>SEL.add(a.id));else SEL.clear();atualizarSel();return}
+  if(t.id==='selStatus'){atualizarSel();return}
   if(t.closest('#boxFiltros,#barraRapida'))lerFiltros()});
 $('#fTexto').addEventListener('input',()=>{clearTimeout(window._ft);window._ft=setTimeout(lerFiltros,300)});
 $('#btnLimpar').onclick=$('#btnLimpar2').onclick=()=>{F={...filtrosPadrao(),visao:F.visao};LS.set('painel_filtros',F);montarFiltros();limite=40;renderLista()};
 $('#btnMais').onclick=()=>{limite+=40;renderLista()};
+$('#selStatus').innerHTML='<option value="">Mudar status para…</option>'+STATUS.map(([k,n])=>`<option value="${k}">${n}</option>`).join('');
+$('#selAplicar').onclick=aplicarSel;$('#selLimpar').onclick=()=>{SEL.clear();atualizarSel()};$('#selDesfazer').onclick=desfazerSel;
 function mostrarSaude(aberta){$('#saude').hidden=!aberta;$('#saude').style.display=aberta?'flex':'none';
   $('#btnSaude').hidden=!SAUDE||aberta;$('#btnSaude').title=SAUDE?$('#saudeTx').textContent:'';}
 $('#saudeX').onclick=()=>{LS.set('saudeFechada',SAUDE);mostrarSaude(false)};
