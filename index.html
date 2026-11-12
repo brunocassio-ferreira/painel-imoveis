@@ -967,7 +967,7 @@ function gerarPdf(){
     return `<div class="c${a.proprietario?' own':''}"><div class="p">${mi(a.preco)} <span class="s">nota ${a.score}${st&&st!=='novo'?' · '+esc(STM[st]?.nome||st):''}</span></div>
     <div class="m">${esc([a.tipo,a.area_m2&&a.area_m2+' m²',a.quartos&&a.quartos+' qts',a.rua,a.fonte].filter(Boolean).join(' · '))}</div>
     <div class="m">${a.estoque?'estoque inicial':(a.publicado?'publicado ':'visto ')+(a.rec===a.publicado?brh(a.rec):br(a.rec))}${a.outrosNomes.length?' · também em '+esc(a.outrosNomes.join(', ')):''}</div>
-    ${a.link?`<a href="${esc(a.link)}">${esc(a.link.replace(/^https?:\/\/(www\.)?/,'').slice(0,70))}</a>`:''}${a.outrosAds.map(o=>`<div class="m">Possível mesmo imóvel em ${esc(o.fonte)} (${mi(o.preco)}): <a href="${esc(o.link)}">${esc(o.link.replace(/^https?:\/\/(www\.)?/,'').slice(0,70))}</a></div>`).join('')}</div>`}).join('')).join('');
+    ${a.link?`<a href="${esc(safeUrl(a.link))}">${esc(a.link.replace(/^https?:\/\/(www\.)?/,'').slice(0,70))}</a>`:''}${a.outrosAds.map(o=>`<div class="m">Possível mesmo imóvel em ${esc(o.fonte)} (${mi(o.preco)}): <a href="${esc(safeUrl(o.link))}">${esc(o.link.replace(/^https?:\/\/(www\.)?/,'').slice(0,70))}</a></div>`).join('')}</div>`}).join('')).join('');
   w.document.write(`<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Anúncios ${HOJE_ISO}</title>
 <style>@page{size:A4;margin:10mm}body{font:13px/1.35 Arial,sans-serif;color:#222;background:#fff;margin:12px}h1{font-size:18px;margin:0 0 4px}
 h2{font-size:15px;background:#E3DCFA;padding:4px 8px;margin:12px 0 6px;break-after:avoid}.c{border:1px solid #ccc;border-radius:6px;padding:6px 8px;margin:0 0 6px;break-inside:avoid}
