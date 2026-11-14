@@ -468,7 +468,7 @@ const CHECKS={fUnico:'unico',fQueda:'queda'};
 const CAMPOS={fTexto:'texto',fAnunc:'anunc',fPmin:'pmin',fPmax:'pmax',fAmin:'amin',fAmax:'amax',fOrdem:'ordem'};
 function grupo(id,rot,k,ops){$('#'+id).innerHTML=`<b class="lbl">${rot}</b>`+ops.map(([v,t])=>
   `<span class="chip${F[k].includes(v)?' on':''}" data-g="${k}" data-v="${esc(v)}">${esc(t)}</span>`).join('')}
-const FAIXAS=[['','','Qualquer'],['500','800','500 a 800 mil'],['800','1500','800 mil a 1,5 mi'],['1500','3000','1,5 a 3 mi'],['3000','','Acima de 3 mi']];
+const FAIXAS=[['','','Qualquer'],['300','500','300 a 500 mil'],['500','800','500 a 800 mil'],['800','1500','800 mil a 1,5 mi'],['1500','3000','1,5 a 3 mi'],['3000','','Acima de 3 mi']];
 // 27/10, pedido de Bruno ("filtros demais que se sobrepoem"): tres visoes no lugar de atalhos, periodo, data, levantamento e
 // "14 dias". Imovel novo = 1a aparicao recente em qualquer site, sem republicacao, fora de republicador e de estoque (a rede ja sai
 // antes, no exportar_painel). Em 2 sites fora da rede tambem serve; o de um site so ganha nota maior
@@ -974,7 +974,7 @@ h2{font-size:15px;background:#E3DCFA;padding:4px 8px;margin:12px 0 6px;break-aft
 .own{border-left:5px solid #2e7d32}.p{font-size:16px;font-weight:bold}.s{font-size:12px;color:#666;font-weight:normal}.m{color:#555;font-size:12px}a{color:#0b5cad;font-size:11px;word-break:break-all}
 .top{color:#555;margin-bottom:8px}@media print{.noprint{display:none}}</style></head><body>
 <button class="noprint" onclick="print()" style="padding:8px 14px;margin-bottom:10px">Salvar em PDF / imprimir</button>
-<h1>Anúncios ≥ R$ 500 mil</h1><div class="top">${br(HOJE_ISO)} · ${r.length} anúncios${filtrar().length>300?' (primeiros 300)':''} · filtros do painel aplicados · faixa verde = proprietário</div>${blocos}</body></html>`);
+<h1>Anúncios ≥ R$ 300 mil</h1><div class="top">${br(HOJE_ISO)} · ${r.length} anúncios${filtrar().length>300?' (primeiros 300)':''} · filtros do painel aplicados · faixa verde = proprietário</div>${blocos}</body></html>`);
   w.document.close();setTimeout(()=>w.print(),500);
 }
 
