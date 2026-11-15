@@ -1273,7 +1273,7 @@ function vCard(x){
   const c=x.consultor||{},tel=(c.celular||c.telefone||'').replace(/\D/g,''),wa=tel?`https://wa.me/${tel.startsWith('55')?tel:'55'+tel}`:'';
   const cor=x.indice>=70?'var(--ok)':x.indice>=55?'#B8860B':'#7a7a7a';
   const n=x.notas||{};
-  const dica=`Preço ${Math.round(n.preco)} · Fotos ${Math.round(n.foto)} · Liquidez do prédio ${Math.round(n.liquidez)} · Valor do imóvel ${Math.round(n.ticket)} · Tempo no ar ${Math.round(n.tempo)}`;
+  const dica=`Preço ${Math.round(n.preco)} · Fotos ${Math.round(n.foto)} · Liquidez do prédio ${Math.round(n.liquidez)} · Faixa de preço ${Math.round(n.ticket)} · Tempo no ar ${Math.round(n.tempo)}`;
   const fotos=(x.fotos||[]).slice(0,3).map(u=>`<img loading="lazy" referrerpolicy="no-referrer" src="${esc(safeUrl(u))}" alt="">`).join('');
   const idade=x.dias_est!=null?`no ar há cerca de ${x.dias_est} dias (pela data das fotos)`:'idade não estimada';
   const tags=[x.suder?'<span class="tag prop">Suder</span>':'',x.queda?`<span class="tag queda">baixou ${x.queda.pct}%</span>`:'',
@@ -1287,7 +1287,7 @@ function vCard(x){
    <div class="loc"><b>${esc(x.bairro)}</b>${x.rua?' · '+esc(vTitulo(x.rua))+(x.numero?', '+esc(x.numero):''):''}</div>
    <div class="det">${esc(vTitulo(x.tipo))} · ${esc(x.area)} m²${x.quartos?' · '+esc(x.quartos)+' qts':''}${x.edificio?' · '+esc(vTitulo(x.edificio)):''}</div>
    <div class="det">${x.m2?money(x.m2)+'/m²':''}${x.ref_m2?` · parecidos: ${money(x.ref_m2)}/m² (${esc(x.ref_tipo)}, ${x.ref_n} imóveis)`:''}${x.itbi_m2?` · pago no prédio (ITBI): ${money(x.itbi_m2)}/m²`:''}</div>
-   <div class="det">Fotos: nota ${x.foto_nota} (${esc(x.foto_obs)}). ${esc(idade.charAt(0).toUpperCase()+idade.slice(1))}.${x.vendas24!=null?` Prédio: ${x.vendas24} vendas em 24 meses.`:''}</div>
+   <div class="det">Fotos: nota ${x.foto_nota} (${esc(x.foto_obs)}). ${esc(idade.charAt(0).toUpperCase()+idade.slice(1))}.${x.vendas24!=null?` Prédio: ${x.vendas24} vendas em 24 meses.`:''}${x.mesmas_fotos&&x.mesmas_fotos.length?` Mesmas fotos em ${x.mesmas_fotos.length===1?'outro anúncio':x.mesmas_fotos.length+' outros anúncios'} da rede: ${x.mesmas_fotos.map(esc).join(', ')}.`:''}</div>
    <div class="hist">${esc((x.motivos||[]).join(' · '))}</div>
    <div class="det" style="margin-top:4px"><b>Falar antes com o agenciador:</b> ${esc(c.agencia||'')}${c.nome&&c.nome.replace(/[-\s]/g,'')?' · '+esc(c.nome):''}${tel?' · '+esc(vFone(tel)):''}${c.email?' · '+esc(c.email):''}</div>
    <div class="acoes">
