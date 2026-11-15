@@ -1301,7 +1301,7 @@ function renderVitrine(){const el=$('#tab-vitrine');
   const L=vLista(),bairros=[...new Set(VIT.itens.map(x=>x.bairro))].sort();
   const chip=(a,v,t,on)=>`<span class="chip${on?' on':''}" data-${a}="${esc(v)}">${esc(t)}</span>`;
   el.innerHTML=`<div class="panel"><h3>Vitrine Auxiliadora: imóveis com mais potencial de venda</h3>
-   <p class="mut">Índice de 0 a 100: preço contra imóveis parecidos (35%), qualidade das fotos (30%), vendas recentes no prédio (15%), valor do imóvel (10%) e tempo no ar (10%). A Auxiliadora não informa a data de publicação; a idade é estimada pela data de envio das fotos. Antes de divulgar, fale com o agenciador (nome e contato em cada cartão), como combinado com a Suder.</p>
+   <p class="mut">Índice de 0 a 100: preço contra imóveis parecidos (35%), qualidade das fotos (30%), vendas recentes no prédio (15%), faixa de preço do público, de R$ 450 mil a R$ 1,2 milhão (10%), e tempo no ar (10%). Somam pontos a queda de preço recente (de 4 a 10, e aí a idade não pesa), Moinhos, Menino Deus e Petrópolis (+6) e imóvel da Suder (+6). Anúncios com as mesmas fotos aparecem uma vez só. A Auxiliadora não informa a data de publicação; a idade é estimada pela data de envio das fotos. Antes de divulgar, fale com o agenciador (nome e contato em cada cartão), como combinado com a Suder.</p>
    <p class="mut">Atualizada em ${esc(String(VIT.gerado_em).replace('T',' '))} · ${VIT.base_total} imóveis da rede nos 10 bairros · ${VIT.analisados} analisados com fotos · ${L.length} na lista abaixo.</p></div>
    <div class="box"><div class="chips" style="margin-top:0">${bairros.map(b=>chip('vb',b,b,VF.bairros.includes(b))).join('')}</div>
    <div class="chips">${VTIPOS.map(([k,t])=>chip('vt',k,t,VF.tipos.includes(k))).join('')}</div>
