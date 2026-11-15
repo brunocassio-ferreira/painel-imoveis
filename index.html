@@ -95,7 +95,7 @@ dialog label{display:flex;flex-direction:column;gap:3px;font-size:13px;color:var
 .resp b{display:block;margin-bottom:3px}
 ol.fluxo{padding-left:22px;margin:6px 0}
 ol.fluxo li{margin-bottom:7px;line-height:1.45}
-  .vfotos{display:grid;grid-template-columns:2fr 1fr 1fr;gap:3px;height:128px;margin-bottom:4px}.vfotos img{width:100%;height:100%;object-fit:cover;border-radius:6px;background:var(--chip)}
+  .vfotos{display:grid;grid-template-columns:2fr 1fr 1fr;grid-template-rows:128px;grid-auto-rows:0;gap:3px;height:128px;overflow:hidden;margin-bottom:4px}.vfotos img{display:block;width:100%;height:100%;min-width:0;min-height:0;object-fit:cover;border-radius:6px;background:var(--chip)}
 @media (max-width:600px){.crm{grid-template-columns:1fr}#lista,.grade{grid-template-columns:1fr}.hb .l{width:100px}}
 </style>
 </head>
@@ -1274,7 +1274,7 @@ function vCard(x){
   const cor=x.indice>=70?'var(--ok)':x.indice>=55?'#B8860B':'#7a7a7a';
   const n=x.notas||{};
   const dica=`Preço ${Math.round(n.preco)} · Fotos ${Math.round(n.foto)} · Liquidez do prédio ${Math.round(n.liquidez)} · Faixa de preço ${Math.round(n.ticket)} · Tempo no ar ${Math.round(n.tempo)}`;
-  const fotos=(x.fotos||[]).slice(0,3).map(u=>`<img loading="lazy" referrerpolicy="no-referrer" src="${esc(safeUrl(u))}" alt="">`).join('');
+  const fotos=(x.fotos||[]).slice(0,3).map(u=>`<img loading="lazy" referrerpolicy="no-referrer" src="${esc(safeUrl(u.replace('/thumb/1920/','/thumb/640/')))}" alt="">`).join('');
   const idade=x.dias_est!=null?`no ar há cerca de ${x.dias_est} dias (pela data das fotos)`:'idade não estimada';
   const tags=[x.suder?'<span class="tag prop">Suder</span>':'',x.queda?`<span class="tag queda">baixou ${x.queda.pct}%</span>`:'',
     x.desconto!=null&&x.desconto>=5?`<span class="tag novo">${Math.round(x.desconto)}% abaixo do mercado</span>`:'',
