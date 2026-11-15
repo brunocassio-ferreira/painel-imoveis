@@ -472,7 +472,7 @@ const FAIXAS=[['','','Qualquer'],['300','500','300 a 500 mil'],['500','800','500
 // 27/10, pedido de Bruno ("filtros demais que se sobrepoem"): tres visoes no lugar de atalhos, periodo, data, levantamento e
 // "14 dias". Imovel novo = 1a aparicao recente em qualquer site, sem republicacao, fora de republicador e de estoque (a rede ja sai
 // antes, no exportar_painel). Em 2 sites fora da rede tambem serve; o de um site so ganha nota maior
-const novoDeVerdade=a=>!a.republicado&&!a.republicador&&!a.estoque&&!a.lote;   // lote = carga em bloco de uma imobiliaria (02/11, Evox)
+const novoDeVerdade=a=>!a.republicado&&!a.republicador&&!a.estoque&&!a.lote&&!a.a_conferir;   // a_conferir: OLX sem anunciante lido (15/11)   // lote = carga em bloco de uma imobiliaria (02/11, Evox)
 const VISOES=[['novos','Novos (hoje e ontem)',a=>novoDeVerdade(a)&&a.idade<=1,'Imóveis que apareceram pela primeira vez hoje ou ontem, em qualquer site fora da rede, sem republicação. É a lista do dia.'],
   ['14','Últimos 14 dias',a=>novoDeVerdade(a)&&a.idade<=JANELA,'A mesma regra para os últimos 14 dias. Serve para retomar o que ficou para trás.'],
   ['tudo','Tudo',a=>true,'Tudo o que está no painel, inclusive republicados, cargas em bloco e anunciantes que republicam em ciclo. Descartados e agenciados saem da lista; para vê-los, marque o status no filtro.']];
@@ -602,6 +602,7 @@ function card(a){const L=lead(a.id);const tags=[];
   else if(a.conf&&a.idade<=3)tags.push('<span class="tag novo">NOVO</span>');
   else if(a.radar&&a.idade<=0)tags.push('<span class="tag rad">detectado hoje · sem data</span>');
   else if(a.radar&&a.idade<=3)tags.push('<span class="tag rad">detectado · sem data</span>');
+  if(a.a_conferir)tags.push('<span class="tag est" title="Anunciante do OLX ainda não lido: pode ser da rede (Auxiliadora, Foxter). Fica fora dos novos até a próxima rodada conferir.">OLX · ANUNCIANTE A CONFERIR</span>');
   if(a.republicado)tags.push(`<span class="tag est" title="O mesmo site já anunciou este imóvel com outro código (${esc({foto:'mesmas fotos',semelhante:'fotos semelhantes',dados:'mesmo anunciante, área, quartos e preço'}[a.republicado.como]||'')}). A data do card é a do anúncio anterior.">REPUBLICADO · desde ${esc(br(a.republicado.desde))}</span>`);
   if(a.republicador)tags.push(`<span class="tag est" title="Este anunciante tira anúncios do ar e publica de novo com código novo">republicador</span>`);
   if(a.proprietario)tags.push('<span class="tag prop">proprietário</span>');
@@ -1063,6 +1064,7 @@ const MANUAL_FILTROS=`<div class="panel"><h3>Manual: como chegar aos imóveis no
   <li><b>N sites:</b> o mesmo imóvel em vários sites; os outros links ficam em "Anúncio ▾".</li>
   <li><b>apareceu também em X:</b> imóvel que você já tinha visto, agora anunciado em mais um site. Não é novidade.</li>
   <li><b>1ª aparição do imóvel:</b> a data e o site pioneiro, com o link.</li>
+  <li><b>OLX · ANUNCIANTE A CONFERIR:</b> a página do anúncio ainda não foi lida, então o nome do anunciante e a marca d'água das fotos não foram conferidos. Fica fora de "Novos" até a rodada seguinte; se for da rede, sai do painel.</li>
   <li><b>REPUBLICADO · desde:</b> o mesmo site já tinha anunciado esse imóvel com outro código (mesmas fotos ou mesmo anunciante, área e preço). Não é imóvel novo; a data do card é a do anúncio anterior.</li>
   <li><b>republicador:</b> anunciante que tira e põe de volta o estoque em ciclo (ex.: Newcore no ZAP, toda segunda). Vai para o fim da fila pela nota.</li>
   <li><b>LANÇAMENTO?:</b> várias unidades iguais da mesma imobiliária; quem vende costuma ser a construtora.</li>
