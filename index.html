@@ -438,6 +438,7 @@ function preparar(){
   for(const a of ADS){a.grupo=G[a.gid];a.outrosAds=a.grupo.filter(o=>o!==a);a.outros=a.outrosAds.map(o=>o.id);a.outrosNomes=[...new Set(a.outrosAds.map(o=>nomes[o.id]))]}
   // imovel que voce ja tinha visto em outro site nao e novidade; o anuncio novo fica so com o aviso de site novo
   for(const m of Object.values(G))if(m.length>1&&m.some(o=>o.base_inicial||o.entrada<=ca))for(const o of m)if(o.conferir){o.conferir=false;o.novoSite=true}
+  refM2(G);
   for(const a of ADS)[a.score,a.motivos]=pontuar(a)
   $('#info').textContent=`${DATA.anuncios.length} anúncios · dados de ${DATA.gerado_em?DATA.gerado_em.replace('T',' ').slice(0,16).split(' ').map((p,i)=>i?p:br(p)).join(' '):'?'} · ${modo==='github'?'GitHub privado':'só neste aparelho'}`;
   OPC.fonte=[...new Set(ADS.map(a=>a.fonte))].sort();
@@ -449,6 +450,22 @@ function preparar(){
   OPC.tipo=[...new Set(ADS.map(a=>a.tipo||'não informado'))].sort();
   prepararPredios();
 }
+// R$/m2 de referencia (20/11, bench eemovel): mediana do mesmo bairro e do mesmo tipo (apto x casa), contando um anuncio por
+// imovel; quando a rua tem 8+ imoveis do mesmo tipo com area, compara pela rua. Menos de 8 comparaveis = sem referencia.
+const FAM=t=>/casa|sobrado/.test(t||'')?'casa':/terreno/.test(t||'')?'terreno':'apto';
+const ruaN=r=>{const s=(r||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().replace(/^(rua|r\.|avenida|av\.?|travessa|tv\.?|alameda|al\.?)\s+/,'').trim();return /nao informad/.test(s)?'':s};
+const MIN_REF=8;
+function refM2(G){const B={},R={},add=(o,k,v)=>(o[k]=o[k]||[]).push(v);
+  for(const g of Object.values(G)){const a=g.find(o=>o.pm2);if(!a)continue;const f=FAM(a.tipo);add(B,a.bairro+'|'+f,a.pm2);
+    const r=ruaN((g.find(o=>o.rua)||{}).rua);if(r)add(R,a.bairro+'|'+r+'|'+f,a.pm2)}
+  for(const a of ADS){a.ref=null;if(!a.pm2)continue;const f=FAM(a.tipo),r=ruaN(a.rua);
+    let v=r&&R[a.bairro+'|'+r+'|'+f],onde=a.rua,rua=true;
+    if(!v||v.length<MIN_REF){v=B[a.bairro+'|'+f];onde=a.bairro;rua=false}
+    if(!v||v.length<MIN_REF)continue;
+    const med=mediana(v);a.ref={med,n:v.length,onde,rua,fam:f,dif:Math.round(100*(a.pm2/med-1))}}}
+function refTxt(a){const r=a.ref;if(!r)return '';
+  const d=r.dif>=5?r.dif+'% acima':r.dif<=-5?(-r.dif)+'% abaixo':'na';
+  return `${d} da mediana de ${r.fam==='apto'?'apartamento':r.fam} ${r.rua?'na '+r.onde:(PREP[r.onde]||'em')+' '+r.onde} (${money(r.med)}/m², ${r.n} imóveis)`}
 function pontuar(a){let s=0;const r=[];
   if(a.proprietario){s+=30;r.push('proprietário direto (+30)')}
   // objetivo do painel (24/10): chegar ao anuncio pioneiro; imovel em um site so vale mais que o ja espalhado
@@ -457,7 +474,7 @@ function pontuar(a){let s=0;const r=[];
   if(a.preco_inicial&&a.preco<a.preco_inicial){s+=15;r.push('baixou o preço (+15)')}
   if(a.maduro){s+=15;r.push(`proprietário há ${a.idade} dias no ar, fase em que quem vende sozinho costuma aceitar ajuda (+15)`)}
   if(a.idade<=1){s+=20;r.push('imóvel apareceu pela primeira vez hoje ou ontem (+20)')}else if(a.idade<=3){s+=15;r.push('primeira aparição há até 3 dias (+15)')}else if(a.idade<=7){s+=8;r.push('primeira aparição nesta semana (+8)')}
-  if(a.pm2&&MED[a.bairro]&&a.pm2>MED[a.bairro]*1.15){s+=10;r.push('R$/m² 15% acima da mediana do bairro, abre conversa sobre avaliação (+10)')}
+  if(a.ref&&a.ref.dif>=15){s+=10;r.push(`R$/m² ${refTxt(a)}, abre conversa sobre avaliação (+10)`)}
   if(a.preco>=1.5e6){s+=5;r.push('ticket a partir de R$ 1,5 mi (+5)')}
   if(a.republicador){s-=30;r.push(`${a.anunciante||a.fonte} republica o estoque em ciclo; anúncio novo dele raramente é imóvel novo (-30)`)}
   return [Math.max(0,Math.min(100,s)),r]}
@@ -617,13 +634,14 @@ function card(a){const L=lead(a.id);const tags=[];
   if(a.maduro)tags.push(`<span class="tag mad">${a.idade} dias no ar</span>`);
   if(a.manual)tags.push('<span class="tag">manual</span>');
   const det=[a.area_m2&&a.area_m2+' m²',a.quartos&&a.quartos+' qts',a.pm2&&money(a.pm2)+'/m²',a.tipo].filter(Boolean).join(' · ');
+  const rt=refTxt(a),refL=rt?`<div class="det mut" title="Mediana do R$/m² dos imóveis do mesmo tipo ${a.ref.rua?'na mesma rua':'no mesmo bairro'}, um anúncio por imóvel">R$/m² ${esc(rt)}</div>`:'';
   const pio=a.pioneiro,COMO={publicado:'publicado em',radar:'visto pelo radar em',codigo:'pelo código do anúncio, já existia em'};
   const prim=pio?`1ª aparição do imóvel: ${COMO[pio.como]||''} ${br(pio.data)}${pio.id!==a.id?` em <a class="lk" href="${esc(safeUrl(pio.link))}" target="_blank" rel="noopener">${esc(pio.fonte==='OLX (proprietário)'?'OLX':pio.fonte)} ↗</a>`:' (este anúncio)'} · `:'';
   const datas=prim+(a.publicado?`publicado ${brh(a.publicado)} (confirmado) · visto ${br(a.visto)}`:a.estoque?`data não informada pelo site · já estava no ar quando entrou no radar (${br(a.visto)})`:`data de publicação não informada pelo site · detectado pelo radar em ${br(a.visto)}, pode ser mais antigo`)+(a.ultima&&a.ultima!==a.visto?` · ainda no ar em ${br(a.ultima)}`:'')+(a.outrosNomes.length?` · também em ${esc(a.outrosNomes.join(', '))}`:'');
   return `<article class="card${a.proprietario?' own':''}${L.status==='descartado'?' desc':''}${SEL.has(a.id)?' marcado':''}" data-id="${esc(a.id)}">
   <div class="b1"><input type="checkbox" class="sel" data-act="sel" title="Selecionar para mudar o status de vários de uma vez"${SEL.has(a.id)?' checked':''}>${tags.join('')}<span class="score" style="background:${corScore(a.score)}" title="${esc(a.motivos.join('\n')||'sem sinais fortes')}">${a.score}</span></div>
   <div class="preco">${money(a.preco)}${a.preco<a.preco_inicial?`<s>${money(a.preco_inicial)}</s>`:''}</div>
-  <div class="det">${esc(det)}</div>
+  <div class="det">${esc(det)}</div>${refL}
   <div class="loc"><b>${esc(a.bairro)}</b>${a.rua?' · '+esc(a.rua):''} · ${esc(a.fonte)}</div>
   <div class="datas">${datas}</div>
 <div class="acoes">${a.outrosAds.length?`<button class="btn" data-act="anuncios" title="Abrir o anúncio e ver os outros portais">Anúncio ▾</button>`:`<a class="btn" href="${esc(safeUrl(a.link))}" target="_blank" rel="noopener">Anúncio</a>`}
@@ -1056,7 +1074,7 @@ const MANUAL_FILTROS=`<div class="panel"><h3>Manual: como chegar aos imóveis no
   <li><b>Tudo:</b> consulta. Inclui republicados, cargas em bloco e anunciantes que republicam em ciclo. Descartados e agenciados saem da lista como nas outras visões; marque o status no filtro para vê-los.</li>
   <li><b>Filtrar</b> (bairro, preço, quartos, tipo) recorta a visão escolhida. Para marcar uma região inteira, toque em "Centro-Norte" ou "Zona Sul".</li>
   <li><b>Mais filtros:</b> status, site, proprietário direto, metragem, "Só em um site" e "Baixou o preço" (quem já baixou costuma ouvir uma proposta de avaliação).</li>
-  <li><b>Ordem "Maior oportunidade":</b> a nota soma único (+25), primeira aparição hoje ou ontem (+20), proprietário direto (+30), baixou o preço (+15), R$/m² acima da mediana do bairro (+10), ticket de R$ 1,5 mi ou mais (+5) e tira 30 de quem republica em ciclo. Toque na nota para ver o motivo.</li>
+  <li><b>Ordem "Maior oportunidade":</b> a nota soma único (+25), primeira aparição hoje ou ontem (+20), proprietário direto (+30), baixou o preço (+15), R$/m² 15% ou mais acima da mediana do mesmo tipo de imóvel no bairro, ou na rua quando ela tem 8 ou mais imóveis (+10), ticket de R$ 1,5 mi ou mais (+5) e tira 30 de quem republica em ciclo. Toque na nota para ver o motivo.</li>
   <li>"Limpar" tira os filtros e mantém a visão em que você está.</li></ul></details>
  <details class="box"><summary><b>3. O que cada etiqueta quer dizer</b></summary><ul>
   <li><b>NOVO NO RADAR:</b> entrou depois da sua última conferência.</li>
